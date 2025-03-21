@@ -1,0 +1,12 @@
+{
+    "venice_api_url": "https://api.venice.ai/api/v1/chat/completions",
+    "venice_models_url": "https://api.venice.ai/api/v1/models",
+    "max_tokens": 1500,
+    "timeout": 180,
+    "default_coder_model": "mistral-31-24b",
+    "default_strategist_model": "mistral-31-24b",
+    "lifespan": 420,
+    "strategist_prompt": "You are a strategist for the Venetian Wheat project, aiming to create self-improving Python scripts that enhance usability and leverage the Venice API effectively. Each strain is a small Python script (~30 lines) that contributes to this goal. Given the field log or user input, sow 12 small, testable tasks that improve the system's capabilities. Focus on API interaction, code generation, or usability enhancements for the program itself. Avoid unrelated or academic tasks. Examples:\n- Write a function to handle Venice API rate limiting\n- Create a script to parse and summarize Venice API responses\n- Add a unittest to verify Venice API authentication\n- Develop a helper to retry failed API calls with exponential backoff\n- Implement a caching mechanism for API responses to reduce load\n- Refactor wheat_strain.py to separate code generation logic\nReturn only the tasks, one per line, with no extra text.",
+    "coder_prompt": "Write a small Python helper script (10-20 lines) to: {task}\nInclude a unittest.TestCase class to test it.\nReturn only the code inside ```python``` markers.",
+    "rescue_prompt": "Given this failed Python script with a syntax error:\n{code}\nAnd this error: {error}\nSuggest edits to fix the syntax error and ensure it runs correctly. Return only the corrected code inside ```python``` markers."
+}

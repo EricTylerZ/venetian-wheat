@@ -1,0 +1,63 @@
+.env
+
+venv/
+.vercel
+
+field_venv/
+
+
+# Python cache and compiled files
+__pycache__/
+*.pyc
+*/__pycache__/
+
+# Virtual environments
+wheat_*_venv/
+strain_*_venv/
+
+# Logs and temp files
+field_log.txt
+field_status.json
+guidance.txt
+token_log.json
+
+# IDE files
+.vscode/
+.idea/
+# Python cache and compiled files
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+
+# Logs and strain data
+wheat/logs/
+wheat/strains/
+wheat/field_log.txt
+wheat/field_status.json
+wheat/guidance.txt
+wheat/pause.txt
+wheat/token_log.json
+wheat/__pycache__/
+
+#.gitignore
+# Python cache and compiled files
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+
+# Logs and strain data
+wheat/logs/
+wheat/strains/
+wheat/field_log.txt
+wheat/field_status.json
+wheat/guidance.txt
+wheat/pause.txt
+wheat/token_log.json
+
+# IDE files
+.vscode/
+.idea/.env
