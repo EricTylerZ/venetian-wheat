@@ -1,11 +1,11 @@
 #wheat/wheat_strain.py
-from concurrent.futures import ThreadPoolExecutor
 import subprocess
 import os
 import time
 import json
 import requests
 from datetime import datetime
+import random
 
 class WheatStrain:
     def __init__(self, task, strain_id, coder_model):
@@ -35,10 +35,17 @@ class WheatStrain:
             "messages": [{"role": "system", "content": prompt}],
             "max_tokens": self.config["max_tokens"]
         }
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(requests.post, self.config["venice_api_url"], headers=headers, json=payload, timeout=self.config["timeout"])
+        retries = 5
+        for attempt in range(retries):
             try:
-                response = future.result()
+                # Sequential call with delay
+                time.sleep(5)  # 5s delay between calls
+                response = requests.post(self.config["venice_api_url"], headers=headers, json=payload, timeout=self.config["timeout"])
+                if response.status_code == 429:
+                    wait_time = 2 ** attempt + random.uniform(0, 1)
+                    self.progress["output"].append(f"Rate limit hit, retrying in {wait_time:.2f}s (attempt {attempt + 1}/{retries})")
+                    time.sleep(wait_time)
+                    continue
                 response.raise_for_status()
                 raw_code = response.json()["choices"][0]["message"]["content"].strip()
                 start = raw_code.find("```python") + 9
@@ -54,8 +61,15 @@ class WheatStrain:
                 self.code_file = os.path.join(log_dir, f"wheat_{self.strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py")
                 with open(self.code_file, "w", encoding="utf-8") as f:
                     f.write(code)
+                break
             except requests.RequestException as e:
-                self.progress["output"].append(f"Code gen failed: {str(e)}")
+                if attempt == retries - 1:
+                    self.progress["output"].append(f"Code gen failed after retries: {str(e)}")
+                else:
+                    wait_time = 2 ** attempt + random.uniform(0, 1)
+                    self.progress["output"].append(f"Retry in {wait_time:.2f}s due to: {str(e)} (attempt {attempt + 1}/{retries})")
+                    time.sleep(wait_time)
+        self.save_progress()
 
     def grow_and_reap(self):
         if "API error" in self.task:
