@@ -44,8 +44,8 @@ def field_status():
         <button onclick="fetch('/pause')">Pause</button>
         <button onclick="fetch('/resume')">Resume</button>
         <button onclick="fetch('/clear')">Clear Experiments</button>
-        <button onclick="fetch('/success')">Show Successful Strains</button>
-        <button onclick="fetch('/integrate')">Integrate Successful Strains</button>
+        <button onclick="showSuccess()">Show Successful Strains</button>
+        <button onclick="integrateStrains()">Integrate Successful Strains</button>
         <h3>Field Log</h3>
         <pre>{{ log }}</pre>
         <h3>Field Status</h3>
@@ -76,12 +76,25 @@ def field_status():
                 const result = await response.json();
                 alert(result.message);
             }
+            async function showSuccess() {
+                const response = await fetch('/success');
+                const data = await response.json();
+                alert(data.successful_strains);
+            }
+            async function integrateStrains() {
+                const response = await fetch('/integrate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                const data = await response.json();
+                alert(data.message);
+            }
             if (!paused) {
                 setInterval(() => {
-                    cycle += 5;
+                    cycle += 16;
                     document.getElementById('cycle').innerText = cycle;
                     window.location.reload();
-                }, 5000);
+                }, 16000);
             }
         </script>
     """, log=log, status=status, paused=paused)
