@@ -20,6 +20,8 @@ field_log.txt
 field_status.json
 guidance.txt
 token_log.json
+logs/
+tools/outputs/
 
 # IDE files
 .vscode/

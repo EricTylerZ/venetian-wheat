@@ -27,15 +27,14 @@ threading.Thread(target=run_field_manager, daemon=True).start()
 
 @app.route("/")
 def field_status():
+    global manager
     wheat_dir = os.path.join(os.path.dirname(__file__), "wheat")
-    run_dir = os.path.join(wheat_dir, "logs", "runs")
-    latest_log = max([os.path.join(run_dir, f) for f in os.listdir(run_dir) if f.startswith("run_")] or [], default=None, key=os.path.getmtime) if os.path.exists(run_dir) else None
     log = "Field not yet sowed."
     status_path = os.path.join(wheat_dir, "field_status.json")
     paused = os.path.exists(os.path.join(wheat_dir, "pause.txt"))
     status = {}
-    if latest_log:
-        with open(latest_log, "r", encoding="utf-8") as f:
+    if os.path.exists(manager.log_path):
+        with open(manager.log_path, "r", encoding="utf-8") as f:
             log = f.read()
     if os.path.exists(status_path):
         with open(status_path, "r", encoding="utf-8") as f:
@@ -52,7 +51,7 @@ def field_status():
         <button onclick="fetch('/clear')">Clear Experiments</button>
         <button onclick="showSuccess()">Show Successful Strains</button>
         <button onclick="integrateStrains()">Integrate Successful Strains</button>
-        <h3>Field Log (Latest Run)</h3>
+        <h3>Field Log (Current Run)</h3>
         <pre>{{ log }}</pre>
         <h3>Field Status</h3>
         <div id="timer">Cycle: <span id="cycle">0</span>s</div>
@@ -103,7 +102,7 @@ def field_status():
                 const statusDiv = document.getElementById('processingStatus');
                 statusDiv.innerText = data.message;
                 if (!data.complete) {
-                    setTimeout(checkProcessingStatus, 5000);
+                    setTimeout(checkProcessingStatus, 2000);
                 } else {
                     window.location.reload();
                 }
@@ -120,7 +119,7 @@ def field_status():
 
 @app.route("/sow", methods=["POST"])
 def sow():
-    global sowing_in_progress, processing_complete
+    global sowing_in_progress, processing_complete, manager
     if sowing_in_progress:
         return jsonify({"message": "Sowing already in progress."}), 400
     sowing_in_progress = True
@@ -128,6 +127,7 @@ def sow():
     try:
         data = request.get_json() or {}
         guidance = data.get("guidance")
+        manager = FieldManager()  # Fresh manager for each sow
         manager.sow_field(guidance)
         manager.tend_field()
         return jsonify({"message": f"Seeds sowed with guidance: '{guidance or 'None (Venice AI will propose)'}'"})
@@ -155,6 +155,7 @@ def resume():
 
 @app.route("/clear")
 def clear():
+    global manager
     wheat_dir = os.path.join(os.path.dirname(__file__), "wheat")
     for file in ["field_status.json", "pause.txt"]:
         file_path = os.path.join(wheat_dir, file)
@@ -170,7 +171,7 @@ def clear():
     os.makedirs(logs_dir, exist_ok=True)
     os.makedirs(success_dir, exist_ok=True)
     os.makedirs(os.path.join(logs_dir, "runs"), exist_ok=True)
-    manager.strains = []
+    manager = FieldManager()
     manager.sow_field()
     return "Cleared all experiments."
 
@@ -208,9 +209,13 @@ def integrate_successful_strains():
         os.makedirs(helpers_dir, exist_ok=True)
 
         for strain_id, info in status.items():
-            if info["status"] == "Fruitful" and info["output"]:
+            if info["status"] == "Fruitful":
                 try:
-                    code_file = info["output"][-1].split("[Code: ")[1].rstrip("]")
+                    code_file = info["output"][-1].split("[Code: ")[1].rstrip("]") if info["output"] else info.get("code_file", "")
+                    if not code_file and info["code"]:
+                        code_file = os.path.join(wheat_dir, "logs", f"wheat_{strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py")
+                        with open(code_file, "w", encoding="utf-8") as f:
+                            f.write(info["code"])
                     if os.path.exists(code_file):
                         filename = f"strain_{strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py"
                         dest_file = os.path.join(success_dir, filename)
@@ -225,7 +230,7 @@ def integrate_successful_strains():
                             purpose_match = re.search(r'"""(.*?)"""', content, re.DOTALL)
                             purpose = purpose_match.group(1).strip() if purpose_match else "Unknown purpose"
                         integrated_info[filename] = {"function": func_name, "purpose": purpose, "parameters": "TODO: Parse"}
-                except IndexError:
+                except (IndexError, KeyError):
                     continue
 
         with open(os.path.join(helpers_dir, "integrated.json"), "w", encoding="utf-8") as f:

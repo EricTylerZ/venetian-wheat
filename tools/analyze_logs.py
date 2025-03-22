@@ -33,7 +33,9 @@ def test_script(file_path):
 def analyze_logs():
     wheat_dir = os.path.join(os.path.dirname(__file__), "..", "wheat")
     log_dir = os.path.join(wheat_dir, "logs")
-    output_file = os.path.join(wheat_dir, f"strain_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+    output_dir = os.path.join(os.path.dirname(__file__), "outputs")
+    os.makedirs(output_dir, exist_ok=True)
+    output_file = os.path.join(output_dir, f"strain_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
     with open(output_file, "w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["File", "Purpose", "Status"])

@@ -58,6 +58,8 @@ class WheatStrain:
                 else:
                     code = raw_code
                 code = "\n".join(line for line in code.split("\n") if not line.strip().startswith("#") and not line.strip().startswith("```"))
+                # Fix log file paths in generated code
+                code = re.sub(r"logging\.basicConfig$$ (.*?) $$", r"logging.basicConfig(\1, filename='wheat/logs/api_usage.log')", code)
                 self.progress["code"] = code
                 log_dir = os.path.join(os.path.dirname(__file__), "logs")
                 os.makedirs(log_dir, exist_ok=True)

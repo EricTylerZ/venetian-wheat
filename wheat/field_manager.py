@@ -40,7 +40,7 @@ class FieldManager:
         with self.lock:
             if self.strains:
                 with ThreadPoolExecutor(max_workers=12) as executor:
-                    results = executor.map(lambda s: s.grow_and_reap(), [s for s in self.strains if s.progress["status"] == "Growing"])
+                    results = list(executor.map(lambda s: s.grow_and_reap(), [s for s in self.strains if s.progress["status"] == "Growing"]))
                     for result in results:
                         self.log.write(f"{result}\n")
                         self.log.flush()
