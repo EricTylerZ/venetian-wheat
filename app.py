@@ -1,5 +1,5 @@
 #app.py
-from flask import Flask, request, render_template_string, jsonify
+from flask import Flask, request, render_template_string, jsonify, Response
 from wheat.field_manager import FieldManager
 import os
 import json
@@ -10,24 +10,18 @@ import requests
 from datetime import datetime
 
 app = Flask(__name__)
-manager = FieldManager()
+manager = None  # Will be initialized on first load
 sowing_in_progress = False
-processing_complete = False
 
-def run_field_manager():
-    global processing_complete
-    while True:
-        if not os.path.exists(os.path.join(os.path.dirname(__file__), "wheat", "pause.txt")) and not sowing_in_progress:
-            with app.app_context():
-                manager.tend_field()
-                processing_complete = all(s.progress["status"] != "Growing" for s in manager.strains)
-        time.sleep(60)
-
-threading.Thread(target=run_field_manager, daemon=True).start()
+def initialize_manager():
+    global manager
+    if manager is None or not os.path.exists(manager.log_path):
+        manager = FieldManager()
 
 @app.route("/")
 def field_status():
     global manager
+    initialize_manager()
     wheat_dir = os.path.join(os.path.dirname(__file__), "wheat")
     log = "Field not yet sowed."
     status_path = os.path.join(wheat_dir, "field_status.json")
@@ -52,11 +46,10 @@ def field_status():
         <button onclick="showSuccess()">Show Successful Strains</button>
         <button onclick="integrateStrains()">Integrate Successful Strains</button>
         <h3>Field Log (Current Run)</h3>
-        <pre>{{ log }}</pre>
+        <pre id="log">{{ log }}</pre>
         <h3>Field Status</h3>
-        <div id="timer">Cycle: <span id="cycle">0</span>s</div>
         <div id="processingStatus"></div>
-        <table border="1">
+        <table border="1" id="statusTable">
             <tr><th>Strain</th><th>Task</th><th>Status</th><th>Output</th></tr>
             {% for strain_id, info in status.items() %}
                 <tr>
@@ -68,8 +61,6 @@ def field_status():
             {% endfor %}
         </table>
         <script>
-            let cycle = 0;
-            let paused = {{ 'true' if paused else 'false' }};
             async function sowSeeds(event) {
                 event.preventDefault();
                 const form = document.getElementById('sowForm');
@@ -81,7 +72,6 @@ def field_status():
                 });
                 const result = await response.json();
                 alert(result.message);
-                checkProcessingStatus();
             }
             async function showSuccess() {
                 const response = await fetch('/success');
@@ -96,50 +86,63 @@ def field_status():
                 const data = await response.json();
                 alert(data.message);
             }
-            async function checkProcessingStatus() {
-                const response = await fetch('/status');
-                const data = await response.json();
-                const statusDiv = document.getElementById('processingStatus');
-                statusDiv.innerText = data.message;
-                if (!data.complete) {
-                    setTimeout(checkProcessingStatus, 2000);
-                } else {
-                    window.location.reload();
+            const eventSource = new EventSource('/stream');
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                document.getElementById('log').innerText = data.log;
+                const table = document.getElementById('statusTable');
+                table.innerHTML = '<tr><th>Strain</th><th>Task</th><th>Status</th><th>Output</th></tr>';
+                for (const [strain_id, info] of Object.entries(data.status)) {
+                    const row = table.insertRow();
+                    row.insertCell().innerText = strain_id;
+                    row.insertCell().innerText = info.task;
+                    row.insertCell().innerText = info.status;
+                    row.insertCell().innerHTML = info.output.join('<br>');
                 }
-            }
-            if (!paused) {
-                setInterval(() => {
-                    cycle += 16;
-                    document.getElementById('cycle').innerText = cycle;
-                    window.location.reload();
-                }, 16000);
-            }
+                document.getElementById('processingStatus').innerText = data.complete ? 'Processing complete' : 'Processing strains...';
+            };
+            eventSource.onerror = function() {
+                console.log('SSE error - reconnecting...');
+            };
         </script>
     """, log=log, status=status, paused=paused)
 
 @app.route("/sow", methods=["POST"])
 def sow():
-    global sowing_in_progress, processing_complete, manager
+    global sowing_in_progress, manager
     if sowing_in_progress:
         return jsonify({"message": "Sowing already in progress."}), 400
     sowing_in_progress = True
-    processing_complete = False
     try:
         data = request.get_json() or {}
         guidance = data.get("guidance")
-        manager = FieldManager()  # Fresh manager for each sow
+        manager = FieldManager()
         manager.sow_field(guidance)
         manager.tend_field()
         return jsonify({"message": f"Seeds sowed with guidance: '{guidance or 'None (Venice AI will propose)'}'"})
     finally:
         sowing_in_progress = False
 
-@app.route("/status")
-def check_status():
-    global processing_complete
-    complete = all(s.progress["status"] != "Growing" for s in manager.strains)
-    processing_complete = complete
-    return jsonify({"complete": complete, "message": "Processing complete" if complete else "Processing strains..."})
+@app.route("/stream")
+def stream():
+    def event_stream():
+        global manager
+        while True:
+            initialize_manager()
+            wheat_dir = os.path.join(os.path.dirname(__file__), "wheat")
+            status_path = os.path.join(wheat_dir, "field_status.json")
+            log = "Field not yet sowed."
+            status = {}
+            if os.path.exists(manager.log_path):
+                with open(manager.log_path, "r", encoding="utf-8") as f:
+                    log = f.read()
+            if os.path.exists(status_path):
+                with open(status_path, "r", encoding="utf-8") as f:
+                    status = json.load(f)
+            complete = all(s.progress["status"] != "Growing" for s in manager.strains)
+            yield f"data: {json.dumps({'log': log, 'status': status, 'complete': complete})}\n\n"
+            time.sleep(1)  # Update every second
+    return Response(event_stream(), mimetype="text/event-stream")
 
 @app.route("/pause")
 def pause():
@@ -170,9 +173,9 @@ def clear():
     os.makedirs(strains_dir, exist_ok=True)
     os.makedirs(logs_dir, exist_ok=True)
     os.makedirs(success_dir, exist_ok=True)
+    os.makedirs(os.path.join(strains_dir, "generated"), exist_ok=True)
     os.makedirs(os.path.join(logs_dir, "runs"), exist_ok=True)
     manager = FieldManager()
-    manager.sow_field()
     return "Cleared all experiments."
 
 @app.route("/success")
@@ -213,7 +216,7 @@ def integrate_successful_strains():
                 try:
                     code_file = info["output"][-1].split("[Code: ")[1].rstrip("]") if info["output"] else info.get("code_file", "")
                     if not code_file and info["code"]:
-                        code_file = os.path.join(wheat_dir, "logs", f"wheat_{strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py")
+                        code_file = os.path.join(wheat_dir, "strains", "generated", f"wheat_{strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py")
                         with open(code_file, "w", encoding="utf-8") as f:
                             f.write(info["code"])
                     if os.path.exists(code_file):
@@ -225,15 +228,16 @@ def integrate_successful_strains():
                         integrated.append(filename)
                         with open(code_file, "r", encoding="utf-8") as f:
                             content = f.read()
-                            func_match = re.search(r'def (\w+)\(', content)
+                            func_match = re.search(r'def (\w+)\((.*?)\):', content)
                             func_name = func_match.group(1) if func_match else "unknown_function"
+                            params = func_match.group(2).strip() if func_match else "unknown"
                             purpose_match = re.search(r'"""(.*?)"""', content, re.DOTALL)
                             purpose = purpose_match.group(1).strip() if purpose_match else "Unknown purpose"
-                        integrated_info[filename] = {"function": func_name, "purpose": purpose, "parameters": "TODO: Parse"}
+                        integrated_info[filename] = {"function": func_name, "purpose": purpose, "parameters": params}
                 except (IndexError, KeyError):
                     continue
 
-        with open(os.path.join(helpers_dir, "integrated.json"), "w", encoding="utf-8") as f:
+        with open(os.path.join(helpers_dir, "script_registry.json"), "w", encoding="utf-8") as f:
             json.dump(integrated_info, f, indent=2)
 
     return jsonify({"integrated": integrated, "message": f"Integrated {len(integrated)} successful strains into wheat/helpers/."})

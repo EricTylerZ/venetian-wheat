@@ -50,6 +50,8 @@ class WheatStrain:
                 response.raise_for_status()
                 raw_code = response.json()["choices"][0]["message"]["content"].strip()
                 tokens_used = response.headers.get("x-total-tokens", "Unknown")
+                self.progress["output"].append(f"Sent prompt: {prompt[:100]}...")
+                self.progress["output"].append(f"Received response: {raw_code[:100]}...")
                 self.progress["output"].append(f"Tokens used: {tokens_used}")
                 start = raw_code.find("```python") + 9
                 end = raw_code.rfind("```")
@@ -58,10 +60,9 @@ class WheatStrain:
                 else:
                     code = raw_code
                 code = "\n".join(line for line in code.split("\n") if not line.strip().startswith("#") and not line.strip().startswith("```"))
-                # Fix log file paths in generated code
                 code = re.sub(r"logging\.basicConfig$$ (.*?) $$", r"logging.basicConfig(\1, filename='wheat/logs/api_usage.log')", code)
                 self.progress["code"] = code
-                log_dir = os.path.join(os.path.dirname(__file__), "logs")
+                log_dir = os.path.join(os.path.dirname(__file__), "strains", "generated")
                 os.makedirs(log_dir, exist_ok=True)
                 self.code_file = os.path.join(log_dir, f"wheat_{self.strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py")
                 with open(self.code_file, "w", encoding="utf-8") as f:
