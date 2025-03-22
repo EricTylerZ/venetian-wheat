@@ -17,7 +17,9 @@ class FieldManager:
         self.lock = threading.Lock()
         wheat_dir = os.path.join(os.path.dirname(__file__), "..")
         os.makedirs(os.path.join(wheat_dir, "logs", "runs"), exist_ok=True)
-        self.log_path = os.path.join(wheat_dir, "logs", "runs", f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        self.log_path = os.path.join(wheat_dir, "logs", "runs", f"run_{timestamp}.txt")
+        self.status_path = os.path.join(wheat_dir, "logs", "runs", f"field_status_{timestamp}.json")
         with open(self.log_path, "w", encoding="utf-8") as f:
             f.write(f"Field sowed at {time.ctime()} with coder {self.sower.coder_model}\n")
         self.log = open(self.log_path, "a", encoding="utf-8")
@@ -57,8 +59,7 @@ class FieldManager:
 
     def update_status(self):
         status = {strain.strain_id: strain.progress for strain in self.strains}
-        wheat_dir = os.path.join(os.path.dirname(__file__), "..")
-        with open(os.path.join(wheat_dir, "field_status.json"), "w", encoding="utf-8") as f:
+        with open(self.status_path, "w", encoding="utf-8") as f:
             json.dump(status, f, indent=2)
 
 if __name__ == "__main__":

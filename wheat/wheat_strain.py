@@ -50,8 +50,8 @@ class WheatStrain:
                 response.raise_for_status()
                 raw_code = response.json()["choices"][0]["message"]["content"].strip()
                 tokens_used = response.headers.get("x-total-tokens", "Unknown")
-                self.progress["output"].append(f"Sent prompt: {prompt[:100]}...")
-                self.progress["output"].append(f"Received response: {raw_code[:100]}...")
+                self.progress["output"].append(f"Sent prompt: {prompt}")
+                self.progress["output"].append(f"Received response: {raw_code}")
                 self.progress["output"].append(f"Tokens used: {tokens_used}")
                 start = raw_code.find("```python") + 9
                 end = raw_code.rfind("```")
@@ -60,7 +60,7 @@ class WheatStrain:
                 else:
                     code = raw_code
                 code = "\n".join(line for line in code.split("\n") if not line.strip().startswith("#") and not line.strip().startswith("```"))
-                code = re.sub(r"logging\.basicConfig$$   (.*?)   $$", r"logging.basicConfig(\1, filename='wheat/logs/api_usage.log')", code)
+                code = re.sub(r"logging\.basicConfig$$ (.*?) $$", r"logging.basicConfig(\1, filename='wheat/logs/api_usage.log')", code)
                 self.progress["code"] = code
                 log_dir = os.path.join(os.path.dirname(__file__), "strains", "generated")
                 os.makedirs(log_dir, exist_ok=True)
