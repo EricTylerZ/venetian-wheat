@@ -29,7 +29,7 @@ class WheatStrain:
     def generate_code(self, rescue_code=None, rescue_error=None):
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         if rescue_code and rescue_error:
-            prompt = f"{self.config['coder_prompt'].format(task=self.task)}\nPrevious attempt failed with error: {rescue_error}\nPrevious code:\n{rescue_code}"
+            prompt = f"{self.config['coder_prompt'].format(task=self.task)}\nPrevious attempt failed with error:\n{rescue_error}\nPrevious code:\n{rescue_code}"
         else:
             prompt = self.config["coder_prompt"].format(task=self.task)
         payload = {
@@ -40,7 +40,7 @@ class WheatStrain:
         retries = 5
         for attempt in range(retries):
             try:
-                time.sleep(2)  # Reduced delay for faster sowing
+                time.sleep(2)
                 response = requests.post(self.config["venice_api_url"], headers=headers, json=payload, timeout=self.config["timeout"])
                 if response.status_code == 429:
                     wait_time = 2 ** attempt + random.uniform(0, 1)
@@ -92,12 +92,12 @@ class WheatStrain:
                 self.progress["status"] = "Fruitful"
                 log_entry = f"[{timestamp}] [wheat_{self.strain_id}] [{self.task}] [Fruitful] [OK] [Output: {output[:50]}...] [Code: {self.code_file}]"
             else:
-                error_msg = self.progress['test_result'].split('\n')[0] if self.progress['test_result'] else "Unknown error"
+                error_msg = self.progress["test_result"] if self.progress["test_result"] else "Unknown error"
                 self.progress["status"] = "Barren"
-                log_entry = f"[{timestamp}] [wheat_{self.strain_id}] [{self.task}] [Barren] [FAILED] [{error_msg}]"
+                log_entry = f"[{timestamp}] [wheat_{self.strain_id}] [{self.task}] [Barren] [FAILED] [{error_msg[:50]}]"
                 if self.retry_count < 2:
                     self.retry_count += 1
-                    self.progress["output"].append(f"Retry {self.retry_count}/2 for failure: {error_msg}")
+                    self.progress["output"].append(f"Retry {self.retry_count}/2 for failure: {error_msg[:100]}")
                     self.generate_code(self.progress["code"], error_msg)
                     return self.grow_and_reap()
             self.progress["output"].append(log_entry)

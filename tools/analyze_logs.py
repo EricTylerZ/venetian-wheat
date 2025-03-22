@@ -21,8 +21,11 @@ def extract_purpose(content):
 def test_script(file_path):
     try:
         cmd = ["python", "-m", "unittest", file_path]
-        result = subprocess.run(cmd, capture_output=True, text=True, shell=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, shell=True, timeout=10)
         return "OK" in result.stdout or result.returncode == 0
+    except subprocess.TimeoutExpired:
+        print(f"Timeout testing {file_path}")
+        return False
     except Exception as e:
         print(f"Error testing {file_path}: {e}")
         return False

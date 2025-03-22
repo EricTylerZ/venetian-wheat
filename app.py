@@ -12,11 +12,15 @@ from datetime import datetime
 app = Flask(__name__)
 manager = FieldManager()
 sowing_in_progress = False
+processing_complete = False
 
 def run_field_manager():
+    global processing_complete
     while True:
         if not os.path.exists(os.path.join(os.path.dirname(__file__), "wheat", "pause.txt")) and not sowing_in_progress:
-            manager.tend_field()
+            with app.app_context():
+                manager.tend_field()
+                processing_complete = all(s.progress["status"] != "Growing" for s in manager.strains)
         time.sleep(60)
 
 threading.Thread(target=run_field_manager, daemon=True).start()
@@ -52,6 +56,7 @@ def field_status():
         <pre>{{ log }}</pre>
         <h3>Field Status</h3>
         <div id="timer">Cycle: <span id="cycle">0</span>s</div>
+        <div id="processingStatus"></div>
         <table border="1">
             <tr><th>Strain</th><th>Task</th><th>Status</th><th>Output</th></tr>
             {% for strain_id, info in status.items() %}
@@ -77,7 +82,7 @@ def field_status():
                 });
                 const result = await response.json();
                 alert(result.message);
-                setTimeout(() => window.location.reload(), 2000); // Refresh after sowing
+                checkProcessingStatus();
             }
             async function showSuccess() {
                 const response = await fetch('/success');
@@ -92,6 +97,17 @@ def field_status():
                 const data = await response.json();
                 alert(data.message);
             }
+            async function checkProcessingStatus() {
+                const response = await fetch('/status');
+                const data = await response.json();
+                const statusDiv = document.getElementById('processingStatus');
+                statusDiv.innerText = data.message;
+                if (!data.complete) {
+                    setTimeout(checkProcessingStatus, 5000);
+                } else {
+                    window.location.reload();
+                }
+            }
             if (!paused) {
                 setInterval(() => {
                     cycle += 16;
@@ -104,10 +120,11 @@ def field_status():
 
 @app.route("/sow", methods=["POST"])
 def sow():
-    global sowing_in_progress
+    global sowing_in_progress, processing_complete
     if sowing_in_progress:
         return jsonify({"message": "Sowing already in progress."}), 400
     sowing_in_progress = True
+    processing_complete = False
     try:
         data = request.get_json() or {}
         guidance = data.get("guidance")
@@ -116,6 +133,13 @@ def sow():
         return jsonify({"message": f"Seeds sowed with guidance: '{guidance or 'None (Venice AI will propose)'}'"})
     finally:
         sowing_in_progress = False
+
+@app.route("/status")
+def check_status():
+    global processing_complete
+    complete = all(s.progress["status"] != "Growing" for s in manager.strains)
+    processing_complete = complete
+    return jsonify({"complete": complete, "message": "Processing complete" if complete else "Processing strains..."})
 
 @app.route("/pause")
 def pause():
@@ -157,10 +181,14 @@ def show_successful_strains():
     if os.path.exists(status_path):
         with open(status_path, "r", encoding="utf-8") as f:
             status = json.load(f)
-        successful = [
-            f"Strain {strain_id}: {info['task']} - Code: {info['output'][-1].split('[Code: ')[1].rstrip(']')}"
-            for strain_id, info in status.items() if info["status"] == "Fruitful"
-        ]
+        successful = []
+        for strain_id, info in status.items():
+            if info["status"] == "Fruitful" and info["output"]:
+                try:
+                    code_ref = info["output"][-1].split("[Code: ")[1].rstrip("]")
+                    successful.append(f"Strain {strain_id}: {info['task']} - Code: {code_ref}")
+                except IndexError:
+                    successful.append(f"Strain {strain_id}: {info['task']} - Code: Not available")
         summary = "\n".join(successful) if successful else summary
     return jsonify({"successful_strains": summary})
 
@@ -180,25 +208,26 @@ def integrate_successful_strains():
         os.makedirs(helpers_dir, exist_ok=True)
 
         for strain_id, info in status.items():
-            if info["status"] == "Fruitful" and "Code:" in info["output"][-1]:
-                code_file = info["output"][-1].split("[Code: ")[1].rstrip("]")
-                if os.path.exists(code_file):
-                    filename = f"strain_{strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py"
-                    dest_file = os.path.join(success_dir, filename)
-                    shutil.copy(code_file, dest_file)
-                    helper_file = os.path.join(helpers_dir, filename)
-                    shutil.copy(code_file, helper_file)
-                    integrated.append(filename)
-                    # Extract function name and purpose (simplified)
-                    with open(code_file, "r", encoding="utf-8") as f:
-                        content = f.read()
-                        func_match = re.search(r'def (\w+)\(', content)
-                        func_name = func_match.group(1) if func_match else "unknown_function"
-                        purpose_match = re.search(r'"""(.*?)"""', content, re.DOTALL)
-                        purpose = purpose_match.group(1).strip() if purpose_match else "Unknown purpose"
-                    integrated_info[filename] = {"function": func_name, "purpose": purpose, "parameters": "TODO: Parse"}
+            if info["status"] == "Fruitful" and info["output"]:
+                try:
+                    code_file = info["output"][-1].split("[Code: ")[1].rstrip("]")
+                    if os.path.exists(code_file):
+                        filename = f"strain_{strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py"
+                        dest_file = os.path.join(success_dir, filename)
+                        shutil.copy(code_file, dest_file)
+                        helper_file = os.path.join(helpers_dir, filename)
+                        shutil.copy(code_file, helper_file)
+                        integrated.append(filename)
+                        with open(code_file, "r", encoding="utf-8") as f:
+                            content = f.read()
+                            func_match = re.search(r'def (\w+)\(', content)
+                            func_name = func_match.group(1) if func_match else "unknown_function"
+                            purpose_match = re.search(r'"""(.*?)"""', content, re.DOTALL)
+                            purpose = purpose_match.group(1).strip() if purpose_match else "Unknown purpose"
+                        integrated_info[filename] = {"function": func_name, "purpose": purpose, "parameters": "TODO: Parse"}
+                except IndexError:
+                    continue
 
-        # Save integration info
         with open(os.path.join(helpers_dir, "integrated.json"), "w", encoding="utf-8") as f:
             json.dump(integrated_info, f, indent=2)
 
