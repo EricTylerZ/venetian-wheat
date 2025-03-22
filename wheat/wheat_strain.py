@@ -6,6 +6,7 @@ import json
 import requests
 from datetime import datetime
 import random
+import re
 
 class WheatStrain:
     def __init__(self, task, strain_id, coder_model):
@@ -20,6 +21,7 @@ class WheatStrain:
         os.makedirs(self.strain_dir, exist_ok=True)
         self.progress = {"task": task, "status": "Growing", "output": [], "code": "", "test_result": ""}
         self.api_key = os.environ.get("VENICE_API_KEY") or "MISSING_KEY"
+        self.retry_count = 0
         if "API error" not in task:
             self.generate_code()
         self.save_progress()
@@ -27,7 +29,7 @@ class WheatStrain:
     def generate_code(self, rescue_code=None, rescue_error=None):
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         if rescue_code and rescue_error:
-            prompt = self.config["rescue_prompt"].format(code=rescue_code, error=rescue_error)
+            prompt = f"{self.config['coder_prompt'].format(task=self.task)}\nPrevious attempt failed with error: {rescue_error}\nPrevious code:\n{rescue_code}"
         else:
             prompt = self.config["coder_prompt"].format(task=self.task)
         payload = {
@@ -38,8 +40,7 @@ class WheatStrain:
         retries = 5
         for attempt in range(retries):
             try:
-                # Sequential call with delay
-                time.sleep(5)  # 5s delay between calls
+                time.sleep(2)  # Reduced delay for faster sowing
                 response = requests.post(self.config["venice_api_url"], headers=headers, json=payload, timeout=self.config["timeout"])
                 if response.status_code == 429:
                     wait_time = 2 ** attempt + random.uniform(0, 1)
@@ -48,6 +49,8 @@ class WheatStrain:
                     continue
                 response.raise_for_status()
                 raw_code = response.json()["choices"][0]["message"]["content"].strip()
+                tokens_used = response.headers.get("x-total-tokens", "Unknown")
+                self.progress["output"].append(f"Tokens used: {tokens_used}")
                 start = raw_code.find("```python") + 9
                 end = raw_code.rfind("```")
                 if start > 8 and end > start:
@@ -92,8 +95,9 @@ class WheatStrain:
                 error_msg = self.progress['test_result'].split('\n')[0] if self.progress['test_result'] else "Unknown error"
                 self.progress["status"] = "Barren"
                 log_entry = f"[{timestamp}] [wheat_{self.strain_id}] [{self.task}] [Barren] [FAILED] [{error_msg}]"
-                if "SyntaxError" in error_msg:
-                    self.progress["output"].append(f"Attempting syntax rescue for: {error_msg}")
+                if self.retry_count < 2:
+                    self.retry_count += 1
+                    self.progress["output"].append(f"Retry {self.retry_count}/2 for failure: {error_msg}")
                     self.generate_code(self.progress["code"], error_msg)
                     return self.grow_and_reap()
             self.progress["output"].append(log_entry)

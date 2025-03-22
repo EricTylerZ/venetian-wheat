@@ -23,13 +23,15 @@ threading.Thread(target=run_field_manager, daemon=True).start()
 
 @app.route("/")
 def field_status():
-    log_path = os.path.join(os.path.dirname(__file__), "wheat", "field_log.txt")
-    status_path = os.path.join(os.path.dirname(__file__), "wheat", "field_status.json")
-    paused = os.path.exists(os.path.join(os.path.dirname(__file__), "wheat", "pause.txt"))
+    wheat_dir = os.path.join(os.path.dirname(__file__), "wheat")
+    run_dir = os.path.join(wheat_dir, "logs", "runs")
+    latest_log = max([os.path.join(run_dir, f) for f in os.listdir(run_dir) if f.startswith("run_")] or [], default=None, key=os.path.getmtime) if os.path.exists(run_dir) else None
     log = "Field not yet sowed."
+    status_path = os.path.join(wheat_dir, "field_status.json")
+    paused = os.path.exists(os.path.join(wheat_dir, "pause.txt"))
     status = {}
-    if os.path.exists(log_path):
-        with open(log_path, "r", encoding="utf-8") as f:
+    if latest_log:
+        with open(latest_log, "r", encoding="utf-8") as f:
             log = f.read()
     if os.path.exists(status_path):
         with open(status_path, "r", encoding="utf-8") as f:
@@ -46,7 +48,7 @@ def field_status():
         <button onclick="fetch('/clear')">Clear Experiments</button>
         <button onclick="showSuccess()">Show Successful Strains</button>
         <button onclick="integrateStrains()">Integrate Successful Strains</button>
-        <h3>Field Log</h3>
+        <h3>Field Log (Latest Run)</h3>
         <pre>{{ log }}</pre>
         <h3>Field Status</h3>
         <div id="timer">Cycle: <span id="cycle">0</span>s</div>
@@ -75,6 +77,7 @@ def field_status():
                 });
                 const result = await response.json();
                 alert(result.message);
+                setTimeout(() => window.location.reload(), 2000); // Refresh after sowing
             }
             async function showSuccess() {
                 const response = await fetch('/success');
@@ -129,7 +132,7 @@ def resume():
 @app.route("/clear")
 def clear():
     wheat_dir = os.path.join(os.path.dirname(__file__), "wheat")
-    for file in ["field_log.txt", "field_status.json", "pause.txt"]:
+    for file in ["field_status.json", "pause.txt"]:
         file_path = os.path.join(wheat_dir, file)
         if os.path.exists(file_path):
             os.remove(file_path)
@@ -142,58 +145,63 @@ def clear():
     os.makedirs(strains_dir, exist_ok=True)
     os.makedirs(logs_dir, exist_ok=True)
     os.makedirs(success_dir, exist_ok=True)
+    os.makedirs(os.path.join(logs_dir, "runs"), exist_ok=True)
     manager.strains = []
     manager.sow_field()
     return "Cleared all experiments."
 
 @app.route("/success")
 def show_successful_strains():
-    log_path = os.path.join(os.path.dirname(__file__), "wheat", "field_log.txt")
-    log_content = open(log_path, "r", encoding="utf-8").read() if os.path.exists(log_path) else ""
-    with open(os.path.join(os.path.dirname(__file__), "wheat", "config.json"), "r") as f:
-        config = json.load(f)
-    headers = {"Authorization": f"Bearer {os.environ.get('VENICE_API_KEY')}", "Content-Type": "application/json"}
-    prompt = f"Summarize the successful (Fruitful) strains from this log, identifying strain ID, task, and code file location:\n{log_content}"
-    payload = {
-        "model": config["default_coder_model"],
-        "messages": [{"role": "system", "content": prompt}],
-        "max_tokens": config["max_tokens"]
-    }
-    try:
-        response = requests.post(config["venice_api_url"], headers=headers, json=payload, timeout=config["timeout"])
-        response.raise_for_status()
-        summary = response.json()["choices"][0]["message"]["content"].strip()
-        success_dir = os.path.join(os.path.dirname(__file__), "wheat", "successful_strains")
-        os.makedirs(success_dir, exist_ok=True)
-        status_path = os.path.join(os.path.dirname(__file__), "wheat", "field_status.json")
-        if os.path.exists(status_path):
-            with open(status_path, "r", encoding="utf-8") as f:
-                status = json.load(f)
-            for strain_id, info in status.items():
-                if info["status"] == "Fruitful" and "Code:" in info["output"][-1]:
-                    code_file = info["output"][-1].split("[Code: ")[1].rstrip("]")
-                    if os.path.exists(code_file):
-                        dest_file = os.path.join(success_dir, f"strain_{strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py")
-                        shutil.copy(code_file, dest_file)
-                        info["output"].append(f"[Saved to: {dest_file}]")
-            with open(status_path, "w", encoding="utf-8") as f:
-                json.dump(status, f, indent=2)
-    except requests.RequestException as e:
-        summary = f"Failed to summarize: {str(e)}"
+    status_path = os.path.join(os.path.dirname(__file__), "wheat", "field_status.json")
+    summary = "No successful strains found."
+    if os.path.exists(status_path):
+        with open(status_path, "r", encoding="utf-8") as f:
+            status = json.load(f)
+        successful = [
+            f"Strain {strain_id}: {info['task']} - Code: {info['output'][-1].split('[Code: ')[1].rstrip(']')}"
+            for strain_id, info in status.items() if info["status"] == "Fruitful"
+        ]
+        summary = "\n".join(successful) if successful else summary
     return jsonify({"successful_strains": summary})
 
 @app.route("/integrate", methods=["POST"])
 def integrate_successful_strains():
-    success_dir = os.path.join(os.path.dirname(__file__), "wheat", "successful_strains")
+    wheat_dir = os.path.join(os.path.dirname(__file__), "wheat")
+    success_dir = os.path.join(wheat_dir, "successful_strains")
+    helpers_dir = os.path.join(wheat_dir, "helpers")
+    status_path = os.path.join(wheat_dir, "field_status.json")
     integrated = []
-    if os.path.exists(success_dir):
-        for filename in os.listdir(success_dir):
-            if filename.endswith(".py"):
-                src_path = os.path.join(success_dir, filename)
-                dest_path = os.path.join(os.path.dirname(__file__), "wheat", "helpers", filename)
-                os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-                shutil.copy(src_path, dest_path)
-                integrated.append(filename)
+    integrated_info = {}
+
+    if os.path.exists(status_path):
+        with open(status_path, "r", encoding="utf-8") as f:
+            status = json.load(f)
+        os.makedirs(success_dir, exist_ok=True)
+        os.makedirs(helpers_dir, exist_ok=True)
+
+        for strain_id, info in status.items():
+            if info["status"] == "Fruitful" and "Code:" in info["output"][-1]:
+                code_file = info["output"][-1].split("[Code: ")[1].rstrip("]")
+                if os.path.exists(code_file):
+                    filename = f"strain_{strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py"
+                    dest_file = os.path.join(success_dir, filename)
+                    shutil.copy(code_file, dest_file)
+                    helper_file = os.path.join(helpers_dir, filename)
+                    shutil.copy(code_file, helper_file)
+                    integrated.append(filename)
+                    # Extract function name and purpose (simplified)
+                    with open(code_file, "r", encoding="utf-8") as f:
+                        content = f.read()
+                        func_match = re.search(r'def (\w+)\(', content)
+                        func_name = func_match.group(1) if func_match else "unknown_function"
+                        purpose_match = re.search(r'"""(.*?)"""', content, re.DOTALL)
+                        purpose = purpose_match.group(1).strip() if purpose_match else "Unknown purpose"
+                    integrated_info[filename] = {"function": func_name, "purpose": purpose, "parameters": "TODO: Parse"}
+
+        # Save integration info
+        with open(os.path.join(helpers_dir, "integrated.json"), "w", encoding="utf-8") as f:
+            json.dump(integrated_info, f, indent=2)
+
     return jsonify({"integrated": integrated, "message": f"Integrated {len(integrated)} successful strains into wheat/helpers/."})
 
 if __name__ == "__main__":

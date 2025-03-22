@@ -58,8 +58,9 @@ class Sower:
             return [f"API error: {str(e)} - Key: {self.api_key[:4]}..."]
 
     def sow_seeds(self, guidance=None):
-        log_path = os.path.join(os.path.dirname(__file__), "field_log.txt")
-        log_content = open(log_path, "r").read() if os.path.exists(log_path) else ""
+        log_dir = os.path.join(os.path.dirname(__file__), "logs", "runs")
+        latest_log = max([os.path.join(log_dir, f) for f in os.listdir(log_dir) if f.startswith("run_")] or [], default=None, key=os.path.getmtime) if os.path.exists(log_dir) else None
+        log_content = open(latest_log, "r", encoding="utf-8").read() if latest_log else ""
         prompt = self.strategist_prompt + f"\nField log: {log_content[:1000]}\n" + (f"User input: {guidance}" if guidance else "No user input—sow tasks to improve wheat strains.")
         with ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(self.fetch_tasks, prompt)
