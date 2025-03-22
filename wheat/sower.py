@@ -5,14 +5,15 @@ import requests
 import os
 import json
 
-load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
+load_dotenv(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", ".env"))
 
 class Sower:
     def __init__(self):
-        with open(os.path.join(os.path.dirname(__file__), "config.json"), "r") as f:
+        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config.json"), "r") as f:
             config = json.load(f)
-        self.api_url = config["venice_api_url"]
-        self.models_url = config["venice_models_url"]
+        self.llm_api = config.get("llm_api", "venice")
+        self.api_url = config.get(f"{self.llm_api}_api_url", config["venice_api_url"])
+        self.models_url = config.get(f"{self.llm_api}_models_url", config["venice_models_url"])
         self.max_tokens = config["max_tokens"]
         self.timeout = config["timeout"]
         self.strategist_model = config["default_strategist_model"]
@@ -49,16 +50,26 @@ class Sower:
             "messages": [{"role": "system", "content": prompt}],
             "max_tokens": self.max_tokens
         }
+        sunshine_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "logs", "sunshine")
+        os.makedirs(sunshine_dir, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_request.json"), "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
         try:
             response = requests.post(self.api_url, headers=headers, json=payload, timeout=self.timeout)
             response.raise_for_status()
-            tasks = [t.strip() for t in response.json()["choices"][0]["message"]["content"].strip().split("\n") if t.strip()]
+            raw_response = response.json()
+            with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_{response.status_code}.json"), "w", encoding="utf-8") as f:
+                json.dump(raw_response, f, indent=2)
+            tasks = [t.strip() for t in raw_response["choices"][0]["message"]["content"].strip().split("\n") if t.strip()]
             return tasks
         except requests.RequestException as e:
+            with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_error.json"), "w", encoding="utf-8") as f:
+                json.dump({"error": str(e)}, f, indent=2)
             return [f"API error: {str(e)} - Key: {self.api_key[:4]}..."]
 
     def sow_seeds(self, guidance=None):
-        log_dir = os.path.join(os.path.dirname(__file__), "logs", "runs")
+        log_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "logs", "runs")
         latest_log = max([os.path.join(log_dir, f) for f in os.listdir(log_dir) if f.startswith("run_")] or [], default=None, key=os.path.getmtime) if os.path.exists(log_dir) else None
         log_content = open(latest_log, "r", encoding="utf-8").read() if latest_log else ""
         prompt = self.strategist_prompt + f"\nField log: {log_content[:1000]}\n" + (f"User input: {guidance}" if guidance else "No user input—sow tasks to improve wheat strains.")

@@ -15,7 +15,7 @@ class FieldManager:
         self.reaper = Reaper()
         self.strains = []
         self.lock = threading.Lock()
-        wheat_dir = os.path.join(os.path.dirname(__file__), "..")
+        wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..")
         os.makedirs(os.path.join(wheat_dir, "logs", "runs"), exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.log_path = os.path.join(wheat_dir, "logs", "runs", f"run_{timestamp}.txt")

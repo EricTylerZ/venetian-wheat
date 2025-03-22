@@ -13,10 +13,11 @@ class WheatStrain:
         self.task = task
         self.strain_id = strain_id
         self.coder_model = coder_model
-        with open(os.path.join(os.path.dirname(__file__), "config.json"), "r") as f:
+        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config.json"), "r") as f:
             self.config = json.load(f)
+        self.llm_api = self.config.get("llm_api", "venice")
         self.lifespan = self.config["lifespan"]
-        self.strain_dir = os.path.join(os.path.dirname(__file__), "strains", f"wheat_{strain_id}")
+        self.strain_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "strains", f"wheat_{strain_id}")
         self.start_time = time.time()
         os.makedirs(self.strain_dir, exist_ok=True)
         self.progress = {"task": task, "status": "Growing", "output": [], "code": "", "test_result": ""}
@@ -38,9 +39,14 @@ class WheatStrain:
             "max_tokens": self.config["max_tokens"]
         }
         retries = 5
+        sunshine_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "logs", "sunshine")
+        os.makedirs(sunshine_dir, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
         for attempt in range(retries):
             try:
                 time.sleep(2)
+                with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_request.json"), "w", encoding="utf-8") as f:
+                    json.dump(payload, f, indent=2)
                 response = requests.post(self.config["venice_api_url"], headers=headers, json=payload, timeout=self.config["timeout"])
                 if response.status_code == 429:
                     wait_time = 2 ** attempt + random.uniform(0, 1)
@@ -48,10 +54,13 @@ class WheatStrain:
                     time.sleep(wait_time)
                     continue
                 response.raise_for_status()
-                raw_code = response.json()["choices"][0]["message"]["content"].strip()
+                raw_response = response.json()
+                with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_{response.status_code}.json"), "w", encoding="utf-8") as f:
+                    json.dump(raw_response, f, indent=2)
+                raw_code = raw_response["choices"][0]["message"]["content"].strip()
                 tokens_used = response.headers.get("x-total-tokens", "Unknown")
-                self.progress["output"].append(f"Sent prompt: {prompt}")
-                self.progress["output"].append(f"Received response: {raw_code}")
+                self.progress["output"].append(f"Sent prompt (snippet): {prompt[:100]}...")
+                self.progress["output"].append(f"Received response (snippet): {raw_code[:100]}...")
                 self.progress["output"].append(f"Tokens used: {tokens_used}")
                 start = raw_code.find("```python") + 9
                 end = raw_code.rfind("```")
@@ -60,15 +69,17 @@ class WheatStrain:
                 else:
                     code = raw_code
                 code = "\n".join(line for line in code.split("\n") if not line.strip().startswith("#") and not line.strip().startswith("```"))
-                code = re.sub(r"logging\.basicConfig$$ (.*?) $$", r"logging.basicConfig(\1, filename='wheat/logs/api_usage.log')", code)
+                code = re.sub(r"logging\.basicConfig$$ (.*?) $$", r"logging.basicConfig(\1, filename='logs/api_usage.log')", code)
                 self.progress["code"] = code
-                log_dir = os.path.join(os.path.dirname(__file__), "strains", "generated")
+                log_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "strains", "generated")
                 os.makedirs(log_dir, exist_ok=True)
                 self.code_file = os.path.join(log_dir, f"wheat_{self.strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py")
                 with open(self.code_file, "w", encoding="utf-8") as f:
                     f.write(code)
                 break
             except requests.RequestException as e:
+                with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_error_{attempt}.json"), "w", encoding="utf-8") as f:
+                    json.dump({"error": str(e)}, f, indent=2)
                 if attempt == retries - 1:
                     self.progress["output"].append(f"Code gen failed after retries: {str(e)}")
                 else:

@@ -15,18 +15,19 @@ sowing_in_progress = False
 
 def load_existing_manager():
     global manager
-    wheat_dir = os.path.join(os.path.dirname(__file__), "wheat")
+    wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
     run_dir = os.path.join(wheat_dir, "logs", "runs")
     if os.path.exists(run_dir):
         run_files = [f for f in os.listdir(run_dir) if f.startswith("run_") and f.endswith(".txt")]
-        if run_files:
+        if run_files and manager is None:
             latest_run = max(run_files, key=lambda f: os.path.getmtime(os.path.join(run_dir, f)))
             latest_log = os.path.join(run_dir, latest_run)
             status_file = os.path.join(run_dir, f"field_status_{latest_run[4:-4]}.json")
-            if os.path.exists(status_file) and manager is None:
+            if os.path.exists(status_file):
                 manager = FieldManager()
                 manager.log_path = latest_log
                 manager.log = open(latest_log, "a", encoding="utf-8")
+                manager.status_path = status_file
                 with open(status_file, "r", encoding="utf-8") as f:
                     status = json.load(f)
                 manager.strains = [WheatStrain(info["task"], strain_id, manager.sower.coder_model) for strain_id, info in status.items()]
@@ -39,9 +40,9 @@ def load_existing_manager():
 def field_status():
     global manager
     load_existing_manager()
-    wheat_dir = os.path.join(os.path.dirname(__file__), "wheat")
+    wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
     log = "Field not yet sowed."
-    status_file = os.path.join(wheat_dir, "logs", "runs", f"field_status_{os.path.basename(manager.log_path)[4:-4]}.json")
+    status_file = manager.status_path
     paused = os.path.exists(os.path.join(wheat_dir, "pause.txt"))
     status = {}
     if os.path.exists(manager.log_path):
@@ -146,8 +147,8 @@ def stream():
         global manager
         while True:
             load_existing_manager()
-            wheat_dir = os.path.join(os.path.dirname(__file__), "wheat")
-            status_file = os.path.join(wheat_dir, "logs", "runs", f"field_status_{os.path.basename(manager.log_path)[4:-4]}.json")
+            wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
+            status_file = manager.status_path
             log = "Field not yet sowed."
             status = {}
             if os.path.exists(manager.log_path):
@@ -163,12 +164,14 @@ def stream():
 
 @app.route("/pause")
 def pause():
-    open(os.path.join(os.path.dirname(__file__), "wheat", "pause.txt"), "w").close()
+    wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
+    open(os.path.join(wheat_dir, "pause.txt"), "w").close()
     return "Paused."
 
 @app.route("/resume")
 def resume():
-    pause_file = os.path.join(os.path.dirname(__file__), "wheat", "pause.txt")
+    wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
+    pause_file = os.path.join(wheat_dir, "pause.txt")
     if os.path.exists(pause_file):
         os.remove(pause_file)
     return "Resumed."
@@ -176,7 +179,7 @@ def resume():
 @app.route("/clear")
 def clear():
     global manager
-    wheat_dir = os.path.join(os.path.dirname(__file__), "wheat")
+    wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
     for file in ["pause.txt"]:
         file_path = os.path.join(wheat_dir, file)
         if os.path.exists(file_path):
@@ -192,12 +195,13 @@ def clear():
     os.makedirs(success_dir, exist_ok=True)
     os.makedirs(os.path.join(strains_dir, "generated"), exist_ok=True)
     os.makedirs(os.path.join(logs_dir, "runs"), exist_ok=True)
+    os.makedirs(os.path.join(logs_dir, "sunshine"), exist_ok=True)
     manager = FieldManager()
     return "Cleared all experiments."
 
 @app.route("/success")
 def show_successful_strains():
-    wheat_dir = os.path.join(os.path.dirname(__file__), "wheat")
+    wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
     status_file = os.path.join(wheat_dir, "logs", "runs", f"field_status_{os.path.basename(manager.log_path)[4:-4]}.json")
     summary = "No successful strains found."
     if os.path.exists(status_file):
@@ -216,7 +220,7 @@ def show_successful_strains():
 
 @app.route("/integrate", methods=["POST"])
 def integrate_successful_strains():
-    wheat_dir = os.path.join(os.path.dirname(__file__), "wheat")
+    wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
     success_dir = os.path.join(wheat_dir, "successful_strains")
     helpers_dir = os.path.join(wheat_dir, "helpers")
     status_file = os.path.join(wheat_dir, "logs", "runs", f"field_status_{os.path.basename(manager.log_path)[4:-4]}.json")
