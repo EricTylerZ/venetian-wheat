@@ -10,18 +10,32 @@ import requests
 from datetime import datetime
 
 app = Flask(__name__)
-manager = None  # Will be initialized on first load
+manager = None  # Persistent manager instance
 sowing_in_progress = False
 
-def initialize_manager():
+def load_existing_manager():
     global manager
-    if manager is None or not os.path.exists(manager.log_path):
+    wheat_dir = os.path.join(os.path.dirname(__file__), "wheat")
+    status_path = os.path.join(wheat_dir, "field_status.json")
+    run_dir = os.path.join(wheat_dir, "logs", "runs")
+    if os.path.exists(status_path) and os.path.exists(run_dir):
+        latest_log = max([os.path.join(run_dir, f) for f in os.listdir(run_dir) if f.startswith("run_")] or [], default=None, key=os.path.getmtime) if os.listdir(run_dir) else None
+        if latest_log and manager is None:
+            manager = FieldManager()
+            manager.log_path = latest_log
+            manager.log = open(latest_log, "a", encoding="utf-8")
+            with open(status_path, "r", encoding="utf-8") as f:
+                status = json.load(f)
+            manager.strains = [WheatStrain(info["task"], strain_id, manager.sower.coder_model) for strain_id, info in status.items()]
+            for strain in manager.strains:
+                strain.progress = status[strain.strain_id]
+    if manager is None:
         manager = FieldManager()
 
 @app.route("/")
 def field_status():
     global manager
-    initialize_manager()
+    load_existing_manager()
     wheat_dir = os.path.join(os.path.dirname(__file__), "wheat")
     log = "Field not yet sowed."
     status_path = os.path.join(wheat_dir, "field_status.json")
@@ -128,7 +142,7 @@ def stream():
     def event_stream():
         global manager
         while True:
-            initialize_manager()
+            load_existing_manager()
             wheat_dir = os.path.join(os.path.dirname(__file__), "wheat")
             status_path = os.path.join(wheat_dir, "field_status.json")
             log = "Field not yet sowed."
@@ -139,9 +153,9 @@ def stream():
             if os.path.exists(status_path):
                 with open(status_path, "r", encoding="utf-8") as f:
                     status = json.load(f)
-            complete = all(s.progress["status"] != "Growing" for s in manager.strains)
+            complete = all(s.progress["status"] != "Growing" for s in manager.strains) if manager.strains else True
             yield f"data: {json.dumps({'log': log, 'status': status, 'complete': complete})}\n\n"
-            time.sleep(1)  # Update every second
+            time.sleep(1)
     return Response(event_stream(), mimetype="text/event-stream")
 
 @app.route("/pause")

@@ -22,7 +22,7 @@ class WheatStrain:
         self.progress = {"task": task, "status": "Growing", "output": [], "code": "", "test_result": ""}
         self.api_key = os.environ.get("VENICE_API_KEY") or "MISSING_KEY"
         self.retry_count = 0
-        if "API error" not in task:
+        if "API error" not in task and not self.progress.get("code"):
             self.generate_code()
         self.save_progress()
 
@@ -60,7 +60,7 @@ class WheatStrain:
                 else:
                     code = raw_code
                 code = "\n".join(line for line in code.split("\n") if not line.strip().startswith("#") and not line.strip().startswith("```"))
-                code = re.sub(r"logging\.basicConfig$$ (.*?) $$", r"logging.basicConfig(\1, filename='wheat/logs/api_usage.log')", code)
+                code = re.sub(r"logging\.basicConfig$$   (.*?)   $$", r"logging.basicConfig(\1, filename='wheat/logs/api_usage.log')", code)
                 self.progress["code"] = code
                 log_dir = os.path.join(os.path.dirname(__file__), "strains", "generated")
                 os.makedirs(log_dir, exist_ok=True)
