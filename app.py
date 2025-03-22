@@ -11,10 +11,11 @@ from datetime import datetime
 
 app = Flask(__name__)
 manager = FieldManager()
+sowing_in_progress = False
 
 def run_field_manager():
     while True:
-        if not os.path.exists(os.path.join(os.path.dirname(__file__), "wheat", "pause.txt")):
+        if not os.path.exists(os.path.join(os.path.dirname(__file__), "wheat", "pause.txt")) and not sowing_in_progress:
             manager.tend_field()
         time.sleep(60)
 
@@ -87,11 +88,18 @@ def field_status():
 
 @app.route("/sow", methods=["POST"])
 def sow():
-    data = request.get_json() or {}
-    guidance = data.get("guidance")
-    manager.sow_field(guidance)
-    manager.tend_field()
-    return jsonify({"message": f"Seeds sowed with guidance: '{guidance or 'None (Venice AI will propose)'}'"})
+    global sowing_in_progress
+    if sowing_in_progress:
+        return jsonify({"message": "Sowing already in progress."}), 400
+    sowing_in_progress = True
+    try:
+        data = request.get_json() or {}
+        guidance = data.get("guidance")
+        manager.sow_field(guidance)
+        manager.tend_field()
+        return jsonify({"message": f"Seeds sowed with guidance: '{guidance or 'None (Venice AI will propose)'}'"})
+    finally:
+        sowing_in_progress = False
 
 @app.route("/pause")
 def pause():
@@ -176,4 +184,4 @@ def integrate_successful_strains():
     return jsonify({"integrated": integrated, "message": f"Integrated {len(integrated)} successful strains into wheat/helpers/."})
 
 if __name__ == "__main__":
-    app.run(port=5001, debug=True)
+    app.run(port=5001)
