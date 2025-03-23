@@ -4,7 +4,7 @@
     "venice_models_url": "https://api.venice.ai/api/v1/models",
     "grok_api_url": "https://api.xai.com/grok/v1/chat",
     "grok_models_url": "https://api.xai.com/grok/v1/models",
-    "max_tokens": 500,
+    "max_tokens": 23000,
     "timeout": 180,
     "default_coder_model": "mistral-31-24b",
     "default_strategist_model": "mistral-31-24b",

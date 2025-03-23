@@ -30,8 +30,10 @@ class WheatStrain:
     def generate_code(self, rescue_code=None, rescue_error=None):
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         if rescue_code and rescue_error:
+            self.progress["status"] = "Repairing"
             prompt = f"{self.config['coder_prompt'].format(task=self.task)}\nPrevious attempt failed with error:\n{rescue_error}\nPrevious code:\n{rescue_code}"
         else:
+            self.progress["status"] = "Growing"
             prompt = self.config["coder_prompt"].format(task=self.task)
         payload = {
             "model": self.coder_model,
@@ -82,6 +84,7 @@ class WheatStrain:
                     json.dump({"error": str(e)}, f, indent=2)
                 if attempt == retries - 1:
                     self.progress["output"].append(f"Code gen failed after retries: {str(e)}")
+                    self.progress["status"] = "Barren"
                 else:
                     wait_time = 2 ** attempt + random.uniform(0, 1)
                     self.progress["output"].append(f"Retry in {wait_time:.2f}s due to: {str(e)} (attempt {attempt + 1}/{retries})")
@@ -107,13 +110,15 @@ class WheatStrain:
                 log_entry = f"[{timestamp}] [wheat_{self.strain_id}] [{self.task}] [Fruitful] [OK] [Output: {output[:50]}...] [Code: {self.code_file}]"
             else:
                 error_msg = self.progress["test_result"] if self.progress["test_result"] else "Unknown error"
-                self.progress["status"] = "Barren"
-                log_entry = f"[{timestamp}] [wheat_{self.strain_id}] [{self.task}] [Barren] [FAILED] [{error_msg[:50]}]"
                 if self.retry_count < 2:
                     self.retry_count += 1
+                    self.progress["status"] = "Repairing"
                     self.progress["output"].append(f"Retry {self.retry_count}/2 for failure: {error_msg[:100]}")
                     self.generate_code(self.progress["code"], error_msg)
                     return self.grow_and_reap()
+                else:
+                    self.progress["status"] = "Barren"
+                    log_entry = f"[{timestamp}] [wheat_{self.strain_id}] [{self.task}] [Barren] [FAILED] [{error_msg[:50]}]"
             self.progress["output"].append(log_entry)
             self.save_progress()
             return log_entry

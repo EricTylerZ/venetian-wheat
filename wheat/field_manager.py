@@ -15,19 +15,21 @@ class FieldManager:
         self.reaper = Reaper()
         self.strains = []
         self.lock = threading.Lock()
-        wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..")
-        os.makedirs(os.path.join(wheat_dir, "logs", "runs"), exist_ok=True)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.log_path = os.path.join(wheat_dir, "logs", "runs", f"run_{timestamp}.txt")
-        self.status_path = os.path.join(wheat_dir, "logs", "runs", f"field_status_{timestamp}.json")
-        with open(self.log_path, "w", encoding="utf-8") as f:
-            f.write(f"Field sowed at {time.ctime()} with coder {self.sower.coder_model}\n")
-        self.log = open(self.log_path, "a", encoding="utf-8")
-        self.update_status()
+        self.log_path = None  # Set only when sowing
+        self.status_path = None  # Set only when sowing
+        self.log = None  # Opened only when sowing
 
     def sow_field(self, guidance=None):
         with self.lock:
             if not self.strains:
+                wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..")
+                os.makedirs(os.path.join(wheat_dir, "logs", "runs"), exist_ok=True)
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                self.log_path = os.path.join(wheat_dir, "logs", "runs", f"run_{timestamp}.txt")
+                self.status_path = os.path.join(wheat_dir, "logs", "runs", f"field_status_{timestamp}.json")
+                with open(self.log_path, "w", encoding="utf-8") as f:
+                    f.write(f"Field sowed at {time.ctime()} with coder {self.sower.coder_model}\n")
+                self.log = open(self.log_path, "a", encoding="utf-8")
                 tasks = self.sower.sow_seeds(guidance)
                 while len(tasks) < 12:
                     tasks.extend(tasks[:12 - len(tasks)])
@@ -42,7 +44,7 @@ class FieldManager:
         with self.lock:
             if self.strains:
                 with ThreadPoolExecutor(max_workers=12) as executor:
-                    results = list(executor.map(lambda s: s.grow_and_reap(), [s for s in self.strains if s.progress["status"] == "Growing"]))
+                    results = list(executor.map(lambda s: s.grow_and_reap(), [s for s in self.strains if s.progress["status"] in ["Growing", "Repairing"]]))
                     for result in results:
                         self.log.write(f"{result}\n")
                         self.log.flush()
@@ -58,9 +60,12 @@ class FieldManager:
                 self.update_status()
 
     def update_status(self):
-        status = {strain.strain_id: strain.progress for strain in self.strains}
-        with open(self.status_path, "w", encoding="utf-8") as f:
-            json.dump(status, f, indent=2)
+        if self.status_path:  # Only update if a run has been sown
+            status = {strain.strain_id: strain.progress for strain in self.strains}
+            with open(self.status_path, "w", encoding="utf-8") as f:
+                json.dump(status, f, indent=2)
+            if self.log and not self.log.closed:
+                self.log.flush()
 
 if __name__ == "__main__":
     manager = FieldManager()

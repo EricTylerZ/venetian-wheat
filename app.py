@@ -10,45 +10,43 @@ import requests
 from datetime import datetime
 
 app = Flask(__name__)
-manager = None  # Persistent manager instance
+manager = FieldManager()  # Single global instance, no auto-sowing
 sowing_in_progress = False
 
-def load_existing_manager():
-    global manager
+def load_existing_run():
     wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
     run_dir = os.path.join(wheat_dir, "logs", "runs")
-    if os.path.exists(run_dir):
-        run_files = [f for f in os.listdir(run_dir) if f.startswith("run_") and f.endswith(".txt")]
-        if run_files and manager is None:
-            latest_run = max(run_files, key=lambda f: os.path.getmtime(os.path.join(run_dir, f)))
-            latest_log = os.path.join(run_dir, latest_run)
-            status_file = os.path.join(run_dir, f"field_status_{latest_run[4:-4]}.json")
-            if os.path.exists(status_file):
-                manager = FieldManager()
-                manager.log_path = latest_log
+    if not os.path.exists(run_dir) or not os.listdir(run_dir):
+        return None, None  # No runs exist
+    run_files = [f for f in os.listdir(run_dir) if f.startswith("run_") and f.endswith(".txt")]
+    if run_files:
+        latest_run = max(run_files, key=lambda f: os.path.getmtime(os.path.join(run_dir, f)))
+        latest_log = os.path.join(run_dir, latest_run)
+        status_file = os.path.join(run_dir, f"field_status_{latest_run[4:-4]}.json")
+        if os.path.exists(status_file):
+            manager.log_path = latest_log
+            manager.status_path = status_file
+            if manager.log is None or manager.log.closed:
                 manager.log = open(latest_log, "a", encoding="utf-8")
-                manager.status_path = status_file
-                with open(status_file, "r", encoding="utf-8") as f:
-                    status = json.load(f)
-                manager.strains = [WheatStrain(info["task"], strain_id, manager.sower.coder_model) for strain_id, info in status.items()]
-                for strain in manager.strains:
-                    strain.progress = status[strain.strain_id]
-    if manager is None:
-        manager = FieldManager()
+            with open(status_file, "r", encoding="utf-8") as f:
+                status = json.load(f)
+            manager.strains = [WheatStrain(info["task"], strain_id, manager.sower.coder_model) for strain_id, info in status.items()]
+            for strain in manager.strains:
+                strain.progress = status[strain.strain_id]
+            return latest_log, status_file
+    return None, None
 
 @app.route("/")
 def field_status():
-    global manager
-    load_existing_manager()
+    latest_log, status_file = load_existing_run()
     wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
     log = "Field not yet sowed."
-    status_file = manager.status_path
     paused = os.path.exists(os.path.join(wheat_dir, "pause.txt"))
     status = {}
-    if os.path.exists(manager.log_path):
-        with open(manager.log_path, "r", encoding="utf-8") as f:
+    if latest_log and os.path.exists(latest_log):
+        with open(latest_log, "r", encoding="utf-8") as f:
             log = f.read()
-    if os.path.exists(status_file):
+    if status_file and os.path.exists(status_file):
         with open(status_file, "r", encoding="utf-8") as f:
             status = json.load(f)
 
@@ -79,30 +77,28 @@ def field_status():
             {% endfor %}
         </table>
         <script>
-            async function sowSeeds(event) {
+            function sowSeeds(event) {
                 event.preventDefault();
                 const form = document.getElementById('sowForm');
                 const guidance = form.querySelector('textarea').value.trim();
-                const response = await fetch('/sow', {
+                fetch('/sow', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({guidance: guidance || null})
-                });
-                const result = await response.json();
-                alert(result.message);
+                }).then(response => response.json())
+                  .then(result => alert(result.message));
             }
-            async function showSuccess() {
-                const response = await fetch('/success');
-                const data = await response.json();
-                alert(data.successful_strains);
+            function showSuccess() {
+                fetch('/success')
+                    .then(response => response.json())
+                    .then(data => alert(data.successful_strains));
             }
-            async function integrateStrains() {
-                const response = await fetch('/integrate', {
+            function integrateStrains() {
+                fetch('/integrate', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'}
-                });
-                const data = await response.json();
-                alert(data.message);
+                }).then(response => response.json())
+                  .then(data => alert(data.message));
             }
             const eventSource = new EventSource('/stream');
             eventSource.onmessage = function(event) {
@@ -144,20 +140,18 @@ def sow():
 @app.route("/stream")
 def stream():
     def event_stream():
-        global manager
+        wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
         while True:
-            load_existing_manager()
-            wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
-            status_file = manager.status_path
+            latest_log, status_file = load_existing_run()
             log = "Field not yet sowed."
             status = {}
-            if os.path.exists(manager.log_path):
-                with open(manager.log_path, "r", encoding="utf-8") as f:
+            if latest_log and os.path.exists(latest_log):
+                with open(latest_log, "r", encoding="utf-8") as f:
                     log = f.read()
-            if os.path.exists(status_file):
+            if status_file and os.path.exists(status_file):
                 with open(status_file, "r", encoding="utf-8") as f:
                     status = json.load(f)
-            complete = all(s.progress["status"] != "Growing" for s in manager.strains) if manager.strains else True
+            complete = all(s.progress["status"] in ["Fruitful", "Barren"] for s in manager.strains) if manager.strains else True
             yield f"data: {json.dumps({'log': log, 'status': status, 'complete': complete})}\n\n"
             time.sleep(1)
     return Response(event_stream(), mimetype="text/event-stream")
@@ -196,15 +190,20 @@ def clear():
     os.makedirs(os.path.join(strains_dir, "generated"), exist_ok=True)
     os.makedirs(os.path.join(logs_dir, "runs"), exist_ok=True)
     os.makedirs(os.path.join(logs_dir, "sunshine"), exist_ok=True)
-    manager = FieldManager()
+    manager.strains = []  # Clear strains without creating a new manager
+    manager.log_path = None
+    manager.status_path = None
+    if manager.log and not manager.log.closed:
+        manager.log.close()
+    manager.log = None
     return "Cleared all experiments."
 
 @app.route("/success")
 def show_successful_strains():
     wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
-    status_file = os.path.join(wheat_dir, "logs", "runs", f"field_status_{os.path.basename(manager.log_path)[4:-4]}.json")
+    status_file = manager.status_path if manager and hasattr(manager, 'status_path') else None
     summary = "No successful strains found."
-    if os.path.exists(status_file):
+    if status_file and os.path.exists(status_file):
         with open(status_file, "r", encoding="utf-8") as f:
             status = json.load(f)
         successful = []
@@ -223,11 +222,11 @@ def integrate_successful_strains():
     wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
     success_dir = os.path.join(wheat_dir, "successful_strains")
     helpers_dir = os.path.join(wheat_dir, "helpers")
-    status_file = os.path.join(wheat_dir, "logs", "runs", f"field_status_{os.path.basename(manager.log_path)[4:-4]}.json")
+    status_file = manager.status_path if manager and hasattr(manager, 'status_path') else None
     integrated = []
     integrated_info = {}
 
-    if os.path.exists(status_file):
+    if status_file and os.path.exists(status_file):
         with open(status_file, "r", encoding="utf-8") as f:
             status = json.load(f)
         os.makedirs(success_dir, exist_ok=True)
