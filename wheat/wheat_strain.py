@@ -8,7 +8,7 @@ import sqlite3
 from datetime import datetime
 import random
 import re
-from field_manager import db_lock  # Import db_lock from field_manager.py
+from wheat.field_manager import db_lock  # Corrected import path
 
 class WheatStrain:
     def __init__(self, task, strain_id, coder_model):
