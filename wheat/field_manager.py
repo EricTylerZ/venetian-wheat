@@ -9,8 +9,7 @@ import json
 import threading
 import time
 from datetime import datetime
-
-db_lock = threading.Lock()  # Moved here to break circular import
+from app import db_lock  # Import db_lock from app.py
 
 class FieldManager:
     def __init__(self):

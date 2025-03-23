@@ -1,6 +1,6 @@
 #app.py
 from flask import Flask, request, render_template_string, jsonify, Response
-from wheat.field_manager import FieldManager, db_lock  # Import db_lock from field_manager
+from wheat.field_manager import FieldManager  # Only import FieldManager
 import sqlite3
 import os
 import json
@@ -11,6 +11,7 @@ app = Flask(__name__)
 manager = FieldManager()
 sowing_in_progress = False
 tending_thread = None
+db_lock = threading.Lock()  # Moved back to app.py
 
 def init_db():
     with db_lock:
