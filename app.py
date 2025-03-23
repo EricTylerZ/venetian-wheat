@@ -12,52 +12,55 @@ app = Flask(__name__)
 manager = FieldManager()
 sowing_in_progress = False
 tending_thread = None
+db_lock = threading.Lock()  # Thread-safe DB access
 
 def init_db():
-    conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS runs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp TEXT,
-        log TEXT
-    )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS strains (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        run_id INTEGER,
-        strain_id TEXT,
-        task TEXT,
-        status TEXT,
-        output TEXT,
-        code_file TEXT,
-        test_result TEXT,
-        FOREIGN KEY (run_id) REFERENCES runs(id)
-    )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS api_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        strain_id INTEGER,
-        timestamp TEXT,
-        request TEXT,
-        response TEXT,
-        FOREIGN KEY (strain_id) REFERENCES strains(id)
-    )''')
-    conn.commit()
-    conn.close()
+    with db_lock:
+        conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            log TEXT
+        )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS strains (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id INTEGER,
+            strain_id TEXT,
+            task TEXT,
+            status TEXT,
+            output TEXT,
+            code_file TEXT,
+            test_result TEXT,
+            FOREIGN KEY (run_id) REFERENCES runs(id)
+        )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS api_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            strain_id INTEGER,
+            timestamp TEXT,
+            request TEXT,
+            response TEXT,
+            FOREIGN KEY (strain_id) REFERENCES strains(id)
+        )''')
+        conn.commit()
+        conn.close()
 
-init_db()  # Run once on startup
+init_db()
 
 def get_latest_run():
-    conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
-    c = conn.cursor()
-    c.execute("SELECT id, timestamp, log FROM runs ORDER BY id DESC LIMIT 1")
-    run = c.fetchone()
-    if run:
-        run_id, timestamp, log = run
-        c.execute("SELECT strain_id, task, status, output, code_file, test_result FROM strains WHERE run_id = ?", (run_id,))
-        strains = c.fetchall()
-        manager.strains = [manager.create_strain(row[0], row[1], row[2], row[3], row[4], row[5]) for row in strains]
-        return log, {"timestamp": timestamp, "strains": {row[0]: {"task": row[1], "status": row[2], "output": json.loads(row[3]) if row[3] else [], "code_file": row[4], "test_result": row[5]} for row in strains}}
-    conn.close()
-    return None, None
+    with db_lock:
+        conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
+        c = conn.cursor()
+        c.execute("SELECT id, timestamp, log FROM runs ORDER BY id DESC LIMIT 1")
+        run = c.fetchone()
+        if run:
+            run_id, timestamp, log = run
+            c.execute("SELECT strain_id, task, status, output, code_file, test_result FROM strains WHERE run_id = ?", (run_id,))
+            strains = c.fetchall()
+            manager.strains = [manager.create_strain(row[0], row[1], row[2], row[3], row[4], row[5]) for row in strains]
+            return log, {"timestamp": timestamp, "strains": {row[0]: {"task": row[1], "status": row[2], "output": json.loads(row[3]) if row[3] else [], "code_file": row[4], "test_result": row[5]} for row in strains}}
+        conn.close()
+        return None, None
 
 @app.route("/")
 def field_status():
@@ -209,40 +212,41 @@ def integrate_successful_strains():
     wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
     success_dir = os.path.join(wheat_dir, "successful_strains")
     helpers_dir = os.path.join(wheat_dir, "helpers")
-    conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
-    c = conn.cursor()
-    c.execute("SELECT id FROM runs ORDER BY id DESC LIMIT 1")
-    run_id = c.fetchone()[0] if c.fetchone() else None
-    integrated = []
-    integrated_info = {}
+    with db_lock:
+        conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
+        c = conn.cursor()
+        c.execute("SELECT id FROM runs ORDER BY id DESC LIMIT 1")
+        run_id = c.fetchone()[0] if c.fetchone() else None
+        integrated = []
+        integrated_info = {}
 
-    if run_id:
-        c.execute("SELECT strain_id, task, status, code_file FROM strains WHERE run_id = ? AND status = 'Fruitful'", (run_id,))
-        strains = c.fetchall()
-        os.makedirs(success_dir, exist_ok=True)
-        os.makedirs(helpers_dir, exist_ok=True)
+        if run_id:
+            c.execute("SELECT strain_id, task, status, code_file FROM strains WHERE run_id = ? AND status = 'Fruitful'", (run_id,))
+            strains = c.fetchall()
+            os.makedirs(success_dir, exist_ok=True)
+            os.makedirs(helpers_dir, exist_ok=True)
 
-        for strain_id, task, status, code_file in strains:
-            if code_file and os.path.exists(code_file):
-                filename = f"strain_{strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py"
-                dest_file = os.path.join(success_dir, filename)
-                shutil.copy(code_file, dest_file)
-                helper_file = os.path.join(helpers_dir, filename)
-                shutil.copy(code_file, helper_file)
-                integrated.append(filename)
-                with open(code_file, "r", encoding="utf-8") as f:
-                    content = f.read()
-                    func_match = re.search(r'def (\w+)\((.*?)\):', content)
-                    func_name = func_match.group(1) if func_match else "unknown_function"
-                    params = func_match.group(2).strip() if func_match else "unknown"
-                    purpose_match = re.search(r'"""(.*?)"""', content, re.DOTALL)
-                    purpose = purpose_match.group(1).strip() if purpose_match else "Unknown purpose"
-                integrated_info[filename] = {"function": func_name, "purpose": purpose, "parameters": params}
+            for strain_id, task, status, code_file in strains:
+                if code_file and os.path.exists(code_file):
+                    filename = f"strain_{strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py"
+                    dest_file = os.path.join(success_dir, filename)
+                    shutil.copy(code_file, dest_file)
+                    helper_file = os.path.join(helpers_dir, filename)
+                    shutil.copy(code_file, helper_file)
+                    integrated.append(filename)
+                    with open(code_file, "r", encoding="utf-8") as f:
+                        content = f.read()
+                        func_match = re.search(r'def (\w+)\((.*?)\):', content)
+                        func_name = func_match.group(1) if func_match else "unknown_function"
+                        params = func_match.group(2).strip() if func_match else "unknown"
+                        purpose_match = re.search(r'"""(.*?)"""', content, re.DOTALL)
+                        purpose = purpose_match.group(1).strip() if purpose_match else "Unknown purpose"
+                    integrated_info[filename] = {"function": func_name, "purpose": purpose, "parameters": params}
 
-        with open(os.path.join(helpers_dir, "script_registry.json"), "w", encoding="utf-8") as f:
-            json.dump(integrated_info, f, indent=2)
+            with open(os.path.join(helpers_dir, "script_registry.json"), "w", encoding="utf-8") as f:
+                json.dump(integrated_info, f, indent=2)
 
-    conn.close()
+        conn.close()
     return jsonify({"integrated": integrated, "message": f"Integrated {len(integrated)} successful strains into wheat/helpers/."})
 
 if __name__ == "__main__":
