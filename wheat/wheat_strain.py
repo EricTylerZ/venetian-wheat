@@ -78,12 +78,13 @@ class WheatStrain:
                     raw_response = response.json()
                     with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_{response.status_code}.json"), "w", encoding="utf-8") as f:
                         json.dump(raw_response, f, indent=2)
-retries = 2
+retries = 2  # Reduced for faster failure detection
                     c.execute("INSERT INTO api_logs (strain_id, timestamp, request, response) VALUES (?, ?, ?, ?)",
                               (self.strain_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), json.dumps(payload), json.dumps(raw_response)))
                     raw_code = raw_response["choices"][0]["message"]["content"].strip()
                     tokens_used = response.headers.get("x-total-tokens", "Unknown")
                     self.progress["output"].append(f"Sent prompt (snippet): {prompt[:100]}...")
+conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"), timeout=10)
                     self.progress["output"].append(f"Received response (snippet): {raw_code[:100]}...")
 conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"), timeout=10)
                     self.progress["output"].append(f"Tokens used: {tokens_used}")
@@ -99,6 +100,9 @@ conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)),
                     self.code = code
                     log_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "strains", "generated")
                     os.makedirs(log_dir, exist_ok=True)
+response = requests.post(self.config["venice_api_url"], headers=headers, json=payload, timeout=10) if self.api_key != "MISSING_KEY" else None
+if not response:
+raise Exception("No API key provided or API call failed")
                     self.progress["code_file"] = os.path.join(log_dir, f"wheat_{self.strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py")
                     with open(self.progress["code_file"], "w", encoding="utf-8") as f:
 response = requests.post(self.config["venice_api_url"], headers=headers, json=payload, timeout=10) if self.api_key != "MISSING_KEY" else None
@@ -141,6 +145,17 @@ raise Exception("No API key provided")
 
     def grow_and_reap(self):
         if "API error" in self.task:
+if not self.code:  # Fallback if API fails
+self.progress["status"] = "Barren"
+self.progress["output"].append("Falling back to empty code due to API failure")
+self.code = "# No code generated due to API failure"
+log_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "strains", "generated")
+os.makedirs(log_dir, exist_ok=True)
+self.progress["code_file"] = os.path.join(log_dir, f"wheat_{self.strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py")
+with open(self.progress["code_file"], "w", encoding="utf-8") as f:
+f.write(self.code)
+print(f"Strain {self.strain_id}: Fallback code file written to {self.progress['code_file']}")
+conn.close()
             self.progress["status"] = "Barren"
             return f"[wheat_{self.strain_id}] {self.task}"
         elif self.code:
