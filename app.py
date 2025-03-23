@@ -1,6 +1,6 @@
 #app.py
 from flask import Flask, request, render_template_string, jsonify, Response
-from wheat.field_manager import FieldManager  # Only import FieldManager
+from wheat.field_manager import FieldManager
 import sqlite3
 import os
 import json
@@ -11,9 +11,9 @@ app = Flask(__name__)
 manager = FieldManager()
 sowing_in_progress = False
 tending_thread = None
-db_lock = threading.Lock()  # Moved back to app.py
 
 def init_db():
+    from wheat.wheat_strain import db_lock  # Import here to avoid circularity
     with db_lock:
         conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
         c = conn.cursor()
@@ -47,6 +47,7 @@ def init_db():
 init_db()
 
 def get_latest_run():
+    from wheat.wheat_strain import db_lock  # Import here to avoid circularity
     with db_lock:
         conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
         c = conn.cursor()
@@ -208,6 +209,7 @@ def show_successful_strains():
 
 @app.route("/integrate", methods=["POST"])
 def integrate_successful_strains():
+    from wheat.wheat_strain import db_lock  # Import here to avoid circularity
     wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
     success_dir = os.path.join(wheat_dir, "successful_strains")
     helpers_dir = os.path.join(wheat_dir, "helpers")

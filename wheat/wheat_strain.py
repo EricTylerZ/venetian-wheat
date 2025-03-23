@@ -8,7 +8,9 @@ import sqlite3
 from datetime import datetime
 import random
 import re
-from app import db_lock  # Import db_lock from app.py
+import threading
+
+db_lock = threading.Lock()
 
 class WheatStrain:
     def __init__(self, task, strain_id, coder_model):
@@ -35,8 +37,14 @@ class WheatStrain:
         self.api_key = os.environ.get("VENICE_API_KEY") or "MISSING_KEY"
         self.retry_count = 0
         if "API error" not in task and not self.code:
-            self.generate_code()
-        self.save_progress()
+            print(f"Strain {self.strain_id}: Initializing with task '{task}'")
+            try:
+                self.generate_code()
+            except Exception as e:
+                print(f"Strain {self.strain_id}: Initialization failed - {str(e)}")
+                self.progress["status"] = "Barren"
+                self.progress["output"].append(f"Init failed: {str(e)[:100]}")
+            self.save_progress()
 
     def generate_code(self, rescue_code=None, rescue_error=None):
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
@@ -55,6 +63,7 @@ class WheatStrain:
         sunshine_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "logs", "sunshine")
         os.makedirs(sunshine_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        print(f"Strain {self.strain_id}: Starting code generation")
         with db_lock:
             conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
             c = conn.cursor()
@@ -63,12 +72,8 @@ class WheatStrain:
                     time.sleep(2)
                     with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_request.json"), "w", encoding="utf-8") as f:
                         json.dump(payload, f, indent=2)
-                    response = requests.post(self.config["venice_api_url"], headers=headers, json=payload, timeout=self.config["timeout"])
-                    if response.status_code == 429:
-                        wait_time = 2 ** attempt + random.uniform(0, 1)
-                        self.progress["output"].append(f"Rate limit hit, retrying in {wait_time:.2f}s (attempt {attempt + 1}/{retries})")
-                        time.sleep(wait_time)
-                        continue
+                    print(f"Strain {self.strain_id}: Sending coder API request (attempt {attempt + 1}/{retries})")
+                    response = requests.post(self.config["venice_api_url"], headers=headers, json=payload, timeout=10)
                     response.raise_for_status()
                     raw_response = response.json()
                     with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_{response.status_code}.json"), "w", encoding="utf-8") as f:
@@ -80,6 +85,7 @@ class WheatStrain:
                     self.progress["output"].append(f"Sent prompt (snippet): {prompt[:100]}...")
                     self.progress["output"].append(f"Received response (snippet): {raw_code[:100]}...")
                     self.progress["output"].append(f"Tokens used: {tokens_used}")
+                    print(f"Strain {self.strain_id}: Coder API response received")
                     start = raw_code.find("```python") + 9
                     end = raw_code.rfind("```")
                     if start > 8 and end > start:
@@ -94,19 +100,35 @@ class WheatStrain:
                     self.progress["code_file"] = os.path.join(log_dir, f"wheat_{self.strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py")
                     with open(self.progress["code_file"], "w", encoding="utf-8") as f:
                         f.write(code)
+                    print(f"Strain {self.strain_id}: Code file written to {self.progress['code_file']}")
                     break
+                except requests.Timeout:
+                    print(f"Strain {self.strain_id}: Coder API timeout (attempt {attempt + 1}/{retries})")
+                    if attempt == retries - 1:
+                        self.progress["status"] = "Barren"
+                        self.progress["output"].append("Code gen failed: API timeout after retries")
+                    else:
+                        wait_time = 2 ** attempt + random.uniform(0, 1)
+                        self.progress["output"].append(f"Retrying in {wait_time:.2f}s due to timeout")
+                        time.sleep(wait_time)
                 except requests.RequestException as e:
+                    print(f"Strain {self.strain_id}: Coder API error - {str(e)} (attempt {attempt + 1}/{retries})")
                     with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_error_{attempt}.json"), "w", encoding="utf-8") as f:
                         json.dump({"error": str(e)}, f, indent=2)
                     c.execute("INSERT INTO api_logs (strain_id, timestamp, request, response) VALUES (?, ?, ?, ?)",
                               (self.strain_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), json.dumps(payload), json.dumps({"error": str(e)})))
                     if attempt == retries - 1:
-                        self.progress["output"].append(f"Code gen failed after retries: {str(e)[:100]}...")
                         self.progress["status"] = "Barren"
+                        self.progress["output"].append(f"Code gen failed: {str(e)[:100]}")
                     else:
                         wait_time = 2 ** attempt + random.uniform(0, 1)
-                        self.progress["output"].append(f"Retry in {wait_time:.2f}s due to: {str(e)[:100]}... (attempt {attempt + 1}/{retries})")
+                        self.progress["output"].append(f"Retrying in {wait_time:.2f}s due to: {str(e)[:100]}")
                         time.sleep(wait_time)
+                except Exception as e:
+                    print(f"Strain {self.strain_id}: Unexpected error in generate_code - {str(e)}")
+                    self.progress["status"] = "Barren"
+                    self.progress["output"].append(f"Unexpected error: {str(e)[:100]}")
+                    break
                 finally:
                     conn.commit()
                     self.save_progress()

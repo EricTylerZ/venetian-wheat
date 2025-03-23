@@ -1,6 +1,6 @@
 #wheat/field_manager.py
 from wheat.sower import Sower
-from wheat.wheat_strain import WheatStrain
+from wheat.wheat_strain import WheatStrain, db_lock
 from wheat.reaper import Reaper
 from concurrent.futures import ThreadPoolExecutor
 import sqlite3
@@ -9,7 +9,6 @@ import json
 import threading
 import time
 from datetime import datetime
-from app import db_lock  # Import db_lock from app.py
 
 class FieldManager:
     def __init__(self):
@@ -36,20 +35,41 @@ class FieldManager:
                     conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
                     c = conn.cursor()
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    c.execute("INSERT INTO runs (timestamp, log) VALUES (?, ?)", (timestamp, f"Field sowed at {time.ctime()} with coder {self.sower.coder_model}\n"))
-                    run_id = c.lastrowid
-                    tasks = self.sower.sow_seeds(guidance)
-                    while len(tasks) < 12:
-                        tasks.extend(tasks[:12 - len(tasks)])
-                    tasks = tasks[:12]
-                    self.strains = [WheatStrain(task, str(i), self.sower.coder_model) for i, task in enumerate(tasks)]
-                    log_entry = f"Sowed {len(tasks)} strains: {', '.join(tasks)}\n"
-                    c.execute("UPDATE runs SET log = log || ? WHERE id = ?", (log_entry, run_id))
-                    for strain in self.strains:
-                        c.execute("INSERT INTO strains (run_id, strain_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                  (run_id, strain.strain_id, strain.task, strain.progress["status"], json.dumps(strain.progress["output"]), strain.progress["code_file"], strain.progress["test_result"]))
-                    conn.commit()
-                    conn.close()
+                    try:
+                        c.execute("INSERT INTO runs (timestamp, log) VALUES (?, ?)", (timestamp, f"Field sowed at {time.ctime()} with coder {self.sower.coder_model}\n"))
+                        run_id = c.lastrowid
+                        print(f"Inserted run with ID {run_id} at {timestamp}")
+                        conn.commit()
+                        tasks = self.sower.sow_seeds(guidance)
+                        print(f"Got {len(tasks)} tasks from strategist: {tasks}")
+                        conn.commit()
+                        while len(tasks) < 12:
+                            tasks.extend(tasks[:12 - len(tasks)])
+                        tasks = tasks[:12]
+                        self.strains = []
+                        for i, task in enumerate(tasks):
+                            try:
+                                strain = WheatStrain(task, str(i), self.sower.coder_model)
+                                self.strains.append(strain)
+                                c.execute("INSERT INTO strains (run_id, strain_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                          (run_id, strain.strain_id, strain.task, strain.progress["status"], json.dumps(strain.progress["output"]), strain.progress["code_file"], strain.progress["test_result"]))
+                                print(f"Inserted strain {strain.strain_id} for run {run_id}")
+                                conn.commit()
+                            except Exception as e:
+                                print(f"Error creating strain {i}: {str(e)}")
+                                continue  # Skip failed strains
+                        log_entry = f"Sowed {len(tasks)} strains: {', '.join(tasks)}\n"
+                        c.execute("UPDATE runs SET log = log || ? WHERE id = ?", (log_entry, run_id))
+                        conn.commit()
+                        c.execute("SELECT * FROM runs WHERE id = ?", (run_id,))
+                        print(f"Run after commit: {c.fetchone()}")
+                        c.execute("SELECT * FROM strains WHERE run_id = ?", (run_id,))
+                        print(f"Strains after commit: {c.fetchall()}")
+                    except Exception as e:
+                        print(f"Sow field error: {str(e)}")
+                        conn.rollback()
+                    finally:
+                        conn.close()
 
     def tend_field(self):
         wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat")
