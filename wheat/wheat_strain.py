@@ -44,7 +44,7 @@ class WheatStrain:
                 print(f"Strain {self.strain_id}: Initialization failed - {str(e)}")
                 self.progress["status"] = "Barren"
                 self.progress["output"].append(f"Init failed: {str(e)[:100]}")
-            self.save_progress()
+        self.save_progress()
 
     def generate_code(self, rescue_code=None, rescue_error=None):
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
@@ -59,7 +59,7 @@ class WheatStrain:
             "messages": [{"role": "system", "content": prompt}],
             "max_tokens": self.config["max_tokens"]
         }
-        retries = 5
+        retries = 2  # Reduced for faster failure
         sunshine_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "logs", "sunshine")
         os.makedirs(sunshine_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
@@ -184,6 +184,10 @@ class WheatStrain:
             c = conn.cursor()
             c.execute("UPDATE strains SET status = ?, output = ?, code_file = ?, test_result = ? WHERE strain_id = ?",
                       (self.progress["status"], json.dumps(self.progress["output"]), self.progress["code_file"], self.progress["test_result"], self.strain_id))
+            if c.rowcount == 0:  # If no update (new strain), insert
+                c.execute("INSERT INTO strains (run_id, strain_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                          ((c.execute("SELECT MAX(id) FROM runs").fetchone()[0] if c.execute("SELECT MAX(id) FROM runs").fetchone() else 1),
+                           self.strain_id, self.task, self.progress["status"], json.dumps(self.progress["output"]), self.progress["code_file"], self.progress["test_result"]))
             conn.commit()
             conn.close()
         os.makedirs(self.strain_dir, exist_ok=True)

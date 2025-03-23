@@ -13,7 +13,7 @@ sowing_in_progress = False
 tending_thread = None
 
 def init_db():
-    from wheat.wheat_strain import db_lock  # Import here to avoid circularity
+    from wheat.wheat_strain import db_lock
     with db_lock:
         conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
         c = conn.cursor()
@@ -47,7 +47,7 @@ def init_db():
 init_db()
 
 def get_latest_run():
-    from wheat.wheat_strain import db_lock  # Import here to avoid circularity
+    from wheat.wheat_strain import db_lock
     with db_lock:
         conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
         c = conn.cursor()
@@ -178,10 +178,14 @@ def pause():
 
 @app.route("/resume")
 def resume():
+    global tending_thread
     wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
     pause_file = os.path.join(wheat_dir, "pause.txt")
     if os.path.exists(pause_file):
         os.remove(pause_file)
+    if not tending_thread or not tending_thread.is_alive():
+        tending_thread = threading.Thread(target=manager.tend_field)
+        tending_thread.start()
     return "Resumed."
 
 @app.route("/clear")
@@ -198,18 +202,23 @@ def clear():
 
 @app.route("/success")
 def show_successful_strains():
-    status_file = manager.status_path if manager and hasattr(manager, 'status_path') else None
-    summary = "No successful strains found."
-    if status_file and os.path.exists(status_file):
-        with open(status_file, "r", encoding="utf-8") as f:
-            status = json.load(f)
-        successful = [f"Strain {strain_id}: {info['task']} - {info['output'][-1]}" for strain_id, info in status.items() if info["status"] == "Fruitful" and info["output"]]
-        summary = "\n".join(successful) if successful else summary
+    from wheat.wheat_strain import db_lock
+    with db_lock:
+        conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
+        c = conn.cursor()
+        c.execute("SELECT id FROM runs ORDER BY id DESC LIMIT 1")
+        run_id = c.fetchone()[0] if c.fetchone() else None
+        summary = "No successful strains found."
+        if run_id:
+            c.execute("SELECT strain_id, task, output FROM strains WHERE run_id = ? AND status = 'Fruitful'", (run_id,))
+            successful = [f"Strain {row[0]}: {row[1]} - {json.loads(row[2])[-1] if row[2] else 'No output'}" for row in c.fetchall()]
+            summary = "\n".join(successful) if successful else summary
+        conn.close()
     return jsonify({"successful_strains": summary})
 
 @app.route("/integrate", methods=["POST"])
 def integrate_successful_strains():
-    from wheat.wheat_strain import db_lock  # Import here to avoid circularity
+    from wheat.wheat_strain import db_lock
     wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
     success_dir = os.path.join(wheat_dir, "successful_strains")
     helpers_dir = os.path.join(wheat_dir, "helpers")

@@ -57,7 +57,7 @@ class FieldManager:
                                 conn.commit()
                             except Exception as e:
                                 print(f"Error creating strain {i}: {str(e)}")
-                                continue  # Skip failed strains
+                                continue
                         log_entry = f"Sowed {len(tasks)} strains: {', '.join(tasks)}\n"
                         c.execute("UPDATE runs SET log = log || ? WHERE id = ?", (log_entry, run_id))
                         conn.commit()
@@ -75,6 +75,18 @@ class FieldManager:
         wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat")
         pause_file = os.path.join(wheat_dir, "pause.txt")
         with self.lock:
+            if not self.strains:
+                with db_lock:
+                    conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
+                    c = conn.cursor()
+                    c.execute("SELECT id FROM runs ORDER BY id DESC LIMIT 1")
+                    run_id = c.fetchone()[0] if c.fetchone() else None
+                    if run_id:
+                        c.execute("SELECT strain_id, task, status, output, code_file, test_result FROM strains WHERE run_id = ?", (run_id,))
+                        strains = c.fetchall()
+                        self.strains = [self.create_strain(row[0], row[1], row[2], row[3], row[4], row[5]) for row in strains]
+                        print(f"Loaded {len(self.strains)} strains from run {run_id}")
+                    conn.close()
             while self.strains and not all(s.progress["status"] in ["Fruitful", "Barren"] for s in self.strains):
                 if os.path.exists(pause_file):
                     time.sleep(5)
