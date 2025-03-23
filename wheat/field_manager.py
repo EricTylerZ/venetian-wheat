@@ -80,7 +80,8 @@ class FieldManager:
                     conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
                     c = conn.cursor()
                     c.execute("SELECT id FROM runs ORDER BY id DESC LIMIT 1")
-                    run_id = c.fetchone()[0] if c.fetchone() else None
+run_row = c.fetchone()
+run_id = run_row[0] if run_row else None
                     if run_id:
                         c.execute("SELECT strain_id, task, status, output, code_file, test_result FROM strains WHERE run_id = ?", (run_id,))
                         strains = c.fetchall()
