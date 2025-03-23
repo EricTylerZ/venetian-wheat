@@ -5,6 +5,7 @@ venv/
 
 field_venv/
 
+wheat.db
 
 # Python cache and compiled files
 __pycache__/

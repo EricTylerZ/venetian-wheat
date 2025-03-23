@@ -1,10 +1,9 @@
 #wheat/sower.py
 from dotenv import load_dotenv
-from concurrent.futures import ThreadPoolExecutor
 import requests
 import os
 import json
-from datetime import datetime  # Added missing import
+from datetime import datetime
 
 load_dotenv(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", ".env"))
 
@@ -74,9 +73,7 @@ class Sower:
         latest_log = max([os.path.join(log_dir, f) for f in os.listdir(log_dir) if f.startswith("run_")] or [], default=None, key=os.path.getmtime) if os.path.exists(log_dir) else None
         log_content = open(latest_log, "r", encoding="utf-8").read() if latest_log else ""
         prompt = self.strategist_prompt + f"\nField log: {log_content[:1000]}\n" + (f"User input: {guidance}" if guidance else "No user input—sow tasks to improve wheat strains.")
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(self.fetch_tasks, prompt)
-            return future.result()
+        return self.fetch_tasks(prompt)  # Single call, parsed into tasks
 
 if __name__ == "__main__":
     sower = Sower()
