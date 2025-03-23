@@ -24,12 +24,8 @@ class FieldManager:
             "status": status,
             "output": json.loads(output) if output else [],
             "code_file": code_file or "",
-            "test_result": test_result or "",
-            "code": ""  # Loaded on demand if needed
+            "test_result": test_result or ""
         }
-        if code_file and os.path.exists(code_file):
-            with open(code_file, "r", encoding="utf-8") as f:
-                strain.progress["code"] = f.read()
         return strain
 
     def sow_field(self, guidance=None):
@@ -40,7 +36,7 @@ class FieldManager:
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 c.execute("INSERT INTO runs (timestamp, log) VALUES (?, ?)", (timestamp, f"Field sowed at {time.ctime()} with coder {self.sower.coder_model}\n"))
                 run_id = c.lastrowid
-                tasks = self.sower.sow_seeds(guidance)  # Single API call, parsed into tasks
+                tasks = self.sower.sow_seeds(guidance)
                 while len(tasks) < 12:
                     tasks.extend(tasks[:12 - len(tasks)])
                 tasks = tasks[:12]
@@ -49,7 +45,7 @@ class FieldManager:
                 c.execute("UPDATE runs SET log = log || ? WHERE id = ?", (log_entry, run_id))
                 for strain in self.strains:
                     c.execute("INSERT INTO strains (run_id, strain_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                              (run_id, strain.strain_id, strain.task, strain.progress["status"], json.dumps(strain.progress["output"]), strain.progress["code_file"] or "", strain.progress["test_result"] or ""))
+                              (run_id, strain.strain_id, strain.task, strain.progress["status"], json.dumps(strain.progress["output"]), strain.code_file, strain.progress["test_result"]))
                 conn.commit()
                 conn.close()
 
@@ -69,7 +65,7 @@ class FieldManager:
                         c.execute("UPDATE runs SET log = log || ? WHERE id = (SELECT MAX(id) FROM runs)", (result + "\n",))
                     for strain in self.strains:
                         c.execute("UPDATE strains SET status = ?, output = ?, code_file = ?, test_result = ? WHERE strain_id = ?",
-                                  (strain.progress["status"], json.dumps(strain.progress["output"]), strain.progress["code_file"] or "", strain.progress["test_result"] or "", strain.strain_id))
+                                  (strain.progress["status"], json.dumps(strain.progress["output"]), strain.code_file, strain.progress["test_result"], strain.strain_id))
                     conn.commit()
                     conn.close()
                 for strain in self.strains[:]:
@@ -83,7 +79,7 @@ class FieldManager:
                             self.strains.append(new_strain)
                             c.execute("INSERT INTO strains (run_id, strain_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
                                       (c.execute("SELECT MAX(id) FROM runs").fetchone()[0], new_strain.strain_id, new_strain.task, new_strain.progress["status"],
-                                       json.dumps(new_strain.progress["output"]), new_strain.progress["code_file"] or "", new_strain.progress["test_result"] or ""))
+                                       json.dumps(new_strain.progress["output"]), new_strain.code_file, new_strain.progress["test_result"]))
                         self.strains.remove(strain)
                         conn.commit()
                         conn.close()
