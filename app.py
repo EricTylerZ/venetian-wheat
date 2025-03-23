@@ -1,18 +1,16 @@
 #app.py
 from flask import Flask, request, render_template_string, jsonify, Response
-from wheat.field_manager import FieldManager
+from wheat.field_manager import FieldManager, db_lock  # Import db_lock from field_manager
 import sqlite3
 import os
 import json
 import threading
-import time
 from datetime import datetime
 
 app = Flask(__name__)
 manager = FieldManager()
 sowing_in_progress = False
 tending_thread = None
-db_lock = threading.Lock()  # Thread-safe DB access
 
 def init_db():
     with db_lock:
