@@ -20,10 +20,10 @@ class WheatStrain:
         self.strain_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "strains", f"wheat_{strain_id}")
         self.start_time = time.time()
         os.makedirs(self.strain_dir, exist_ok=True)
-        self.progress = {"task": task, "status": "Growing", "output": [], "code": "", "test_result": ""}
+        self.progress = {"task": task, "status": "Growing", "output": [], "code_file": "", "test_result": ""}
         self.api_key = os.environ.get("VENICE_API_KEY") or "MISSING_KEY"
         self.retry_count = 0
-        if "API error" not in task and not self.progress.get("code"):
+        if "API error" not in task and not self.progress.get("code_file"):
             self.generate_code()
         self.save_progress()
 
@@ -31,7 +31,7 @@ class WheatStrain:
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         if rescue_code and rescue_error:
             self.progress["status"] = "Repairing"
-            prompt = f"{self.config['coder_prompt'].format(task=self.task)}\nPrevious attempt failed with error:\n{rescue_error}\nPrevious code:\n{rescue_code}"
+            prompt = f"{self.config['coder_prompt'].format(task=self.task)}\nPrevious attempt failed with error:\n{rescue_error[:100]}...\nPrevious code:\n{rescue_code}"
         else:
             self.progress["status"] = "Growing"
             prompt = self.config["coder_prompt"].format(task=self.task)
@@ -61,9 +61,7 @@ class WheatStrain:
                     json.dump(raw_response, f, indent=2)
                 raw_code = raw_response["choices"][0]["message"]["content"].strip()
                 tokens_used = response.headers.get("x-total-tokens", "Unknown")
-                self.progress["output"].append(f"Sent prompt (snippet): {prompt[:100]}...")
-                self.progress["output"].append(f"Received response (snippet): {raw_code[:100]}...")
-                self.progress["output"].append(f"Tokens used: {tokens_used}")
+                self.progress["output"].append(f"LLM call at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Tokens: {tokens_used}")
                 start = raw_code.find("```python") + 9
                 end = raw_code.rfind("```")
                 if start > 8 and end > start:
@@ -72,22 +70,23 @@ class WheatStrain:
                     code = raw_code
                 code = "\n".join(line for line in code.split("\n") if not line.strip().startswith("#") and not line.strip().startswith("```"))
                 code = re.sub(r"logging\.basicConfig$$ (.*?) $$", r"logging.basicConfig(\1, filename='logs/api_usage.log')", code)
-                self.progress["code"] = code
                 log_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "strains", "generated")
                 os.makedirs(log_dir, exist_ok=True)
                 self.code_file = os.path.join(log_dir, f"wheat_{self.strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py")
                 with open(self.code_file, "w", encoding="utf-8") as f:
                     f.write(code)
+                self.progress["code_file"] = self.code_file
+                self.progress["code"] = code  # Keep full code here, but it won't be saved to status JSON
                 break
             except requests.RequestException as e:
                 with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_error_{attempt}.json"), "w", encoding="utf-8") as f:
                     json.dump({"error": str(e)}, f, indent=2)
                 if attempt == retries - 1:
-                    self.progress["output"].append(f"Code gen failed after retries: {str(e)}")
+                    self.progress["output"].append(f"Code gen failed after retries: {str(e)[:100]}...")
                     self.progress["status"] = "Barren"
                 else:
                     wait_time = 2 ** attempt + random.uniform(0, 1)
-                    self.progress["output"].append(f"Retry in {wait_time:.2f}s due to: {str(e)} (attempt {attempt + 1}/{retries})")
+                    self.progress["output"].append(f"Retry in {wait_time:.2f}s due to: {str(e)[:100]}... (attempt {attempt + 1}/{retries})")
                     time.sleep(wait_time)
         self.save_progress()
 
@@ -95,7 +94,7 @@ class WheatStrain:
         if "API error" in self.task:
             self.progress["status"] = "Barren"
             return f"[wheat_{self.strain_id}] {self.task}"
-        elif self.progress["code"]:
+        elif self.progress["code_file"]:
             script_path = os.path.join(self.strain_dir, "script.py")
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(self.progress["code"])
@@ -113,7 +112,7 @@ class WheatStrain:
                 if self.retry_count < 2:
                     self.retry_count += 1
                     self.progress["status"] = "Repairing"
-                    self.progress["output"].append(f"Retry {self.retry_count}/2 for failure: {error_msg[:100]}")
+                    self.progress["output"].append(f"Retry {self.retry_count}/2 for failure: {error_msg[:100]}...")
                     self.generate_code(self.progress["code"], error_msg)
                     return self.grow_and_reap()
                 else:
@@ -134,8 +133,16 @@ class WheatStrain:
         return fruitful
 
     def save_progress(self):
+        # Slimmed-down progress for JSON
+        slim_progress = {
+            "task": self.progress["task"],
+            "status": self.progress["status"],
+            "output": self.progress["output"],  # Keep full output for now, could truncate later
+            "code_file": self.progress["code_file"],
+            "test_result": self.progress["test_result"]
+        }
         with open(os.path.join(self.strain_dir, "progress.json"), "w", encoding="utf-8") as f:
-            json.dump(self.progress, f)
+            json.dump(slim_progress, f)
 
 if __name__ == "__main__":
     strain = WheatStrain("Test task", "test123", "mistral-31-24b")

@@ -1,6 +1,7 @@
 #app.py
 from flask import Flask, request, render_template_string, jsonify, Response
 from wheat.field_manager import FieldManager
+from wheat.wheat_strain import WheatStrain  # Added missing import
 import os
 import json
 import shutil
@@ -15,7 +16,7 @@ sowing_in_progress = False
 
 def load_existing_run():
     wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
-    run_dir = os.path.join(wheat_dir, "logs", "runs")
+    run_dir = os.path.join(wheat_dir, "..", "logs", "runs")  # Correct path: venetian-wheat/logs/runs/
     if not os.path.exists(run_dir) or not os.listdir(run_dir):
         return None, None  # No runs exist
     run_files = [f for f in os.listdir(run_dir) if f.startswith("run_") and f.endswith(".txt")]
@@ -62,7 +63,7 @@ def field_status():
         <button onclick="showSuccess()">Show Successful Strains</button>
         <button onclick="integrateStrains()">Integrate Successful Strains</button>
         <h3>Field Log (Current Run)</h3>
-        <pre id="log">{{ log }}</pre>
+        <pre idfinden="log">{{ log }}</pre>
         <h3>Field Status</h3>
         <div id="processingStatus"></div>
         <table border="1" id="statusTable">
@@ -179,7 +180,7 @@ def clear():
         if os.path.exists(file_path):
             os.remove(file_path)
     strains_dir = os.path.join(wheat_dir, "strains")
-    logs_dir = os.path.join(wheat_dir, "logs")
+    logs_dir = os.path.join(wheat_dir, "..", "logs")  # Root-level logs/
     success_dir = os.path.join(wheat_dir, "successful_strains")
     for dir_path in [strains_dir, logs_dir, success_dir]:
         if os.path.exists(dir_path):
@@ -210,10 +211,10 @@ def show_successful_strains():
         for strain_id, info in status.items():
             if info["status"] == "Fruitful" and info["output"]:
                 try:
-                    code_ref = info["output"][-1].split("[Code: ")[1].rstrip("]")
-                    successful.append(f"Strain {strain_id}: {info['task']} - Code: {code_ref}")
+                    code_ref = info["output"][-1]  # Just the latest output line
+                    successful.append(f"Strain {strain_id}: {info['task']} - {code_ref}")
                 except IndexError:
-                    successful.append(f"Strain {strain_id}: {info['task']} - Code: Not available")
+                    successful.append(f"Strain {strain_id}: {info['task']} - No output")
         summary = "\n".join(successful) if successful else summary
     return jsonify({"successful_strains": summary})
 
@@ -235,7 +236,7 @@ def integrate_successful_strains():
         for strain_id, info in status.items():
             if info["status"] == "Fruitful":
                 try:
-                    code_file = info["output"][-1].split("[Code: ")[1].rstrip("]") if info["output"] else info.get("code_file", "")
+                    code_file = info["code_file"] if "code_file" in info else None
                     if not code_file and info["code"]:
                         code_file = os.path.join(wheat_dir, "strains", "generated", f"wheat_{strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py")
                         with open(code_file, "w", encoding="utf-8") as f:

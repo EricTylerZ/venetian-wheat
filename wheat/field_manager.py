@@ -60,8 +60,16 @@ class FieldManager:
                 self.update_status()
 
     def update_status(self):
-        if self.status_path:  # Only update if a run has been sown
-            status = {strain.strain_id: strain.progress for strain in self.strains}
+        if self.status_path and self.strains:  # Only update if a run has been sown and strains exist
+            status = {
+                strain.strain_id: {
+                    "task": strain.task,
+                    "status": strain.progress["status"],
+                    "output": strain.progress["output"],
+                    "retry_count": strain.retry_count,
+                    "timestamp": strain.progress["timestamp"]
+                } for strain in self.strains
+            }
             with open(self.status_path, "w", encoding="utf-8") as f:
                 json.dump(status, f, indent=2)
             if self.log and not self.log.closed:
