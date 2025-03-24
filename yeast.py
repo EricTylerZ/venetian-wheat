@@ -1,8 +1,6 @@
 """
 Yeast: Applies diff-like changes to files in the Venetian Wheat project.
-Copy-paste a diff snippet into diff.txt (e.g., 'FILE: path/to/file\n- line_num old\n+ line_num new'),
-run 'python yeast.py apply' to update files and commit, or 'python yeast.py undo' to revert the last commit.
-Enhanced to log mismatches with actual content and dynamically adjust line numbers.
+Enhanced to dynamically locate expected lines and report mismatches with actual locations.
 """
 
 import os
@@ -11,8 +9,18 @@ import re
 import shutil
 from datetime import datetime
 
+def find_line(file_path, expected_content):
+    """Find the line number of the expected content in the file, return -1 if not found."""
+    with open(file_path, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+    expected = expected_content.strip()
+    for i, line in enumerate(lines, 1):
+        if line.strip() == expected:
+            return i
+    return -1
+
 def check_mismatches(file_path, diffs):
-    """Check if the old lines in diffs match the current file content, return mismatches."""
+    """Check for mismatches and report actual locations of expected lines."""
     if not os.path.exists(file_path):
         return [(None, f"Error: File {file_path} not found")]
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -24,13 +32,15 @@ def check_mismatches(file_path, diffs):
             mismatches.append((None, f"Invalid diff line: {diff}"))
             continue
         action, line_num, content = match.groups()
-        line_num = int(line_num) - 1  # Convert to 0-based index
+        line_num = int(line_num) - 1  # 0-based index
         if action == '-':
             if 0 <= line_num < len(lines):
                 actual = lines[line_num].strip()
                 expected = content.strip()
                 if actual != expected:
-                    mismatches.append((line_num + 1, f"Line {line_num + 1} expected '{expected}', found '{actual}'"))
+                    actual_line = find_line(file_path, expected)
+                    mismatches.append((line_num + 1, f"Line {line_num + 1} expected '{expected}', found '{actual}'" + 
+                                      (f", expected found at line {actual_line}" if actual_line != -1 else "")))
             else:
                 mismatches.append((line_num + 1, f"Line {line_num + 1} out of range (file has {len(lines)} lines)"))
     return mismatches
@@ -53,7 +63,7 @@ def apply_changes(snippet):
             if current_file:
                 changes[current_file].append(line)
     
-    # Check for mismatches first
+    # Check mismatches
     for file_path, diffs in changes.items():
         mismatches = check_mismatches(file_path, diffs)
         warnings.extend([f"Warning: {msg} in {file_path}" for _, msg in mismatches])
@@ -90,7 +100,7 @@ def apply_changes(snippet):
         with open(os.path.join(yeast_dir, "issue_log.txt"), 'w', encoding='utf-8') as f:
             f.write("Yeast auto-undo triggered due to errors:\n" + "\n".join(warnings) + "\n")
             f.write("Copy these files and this log into an LLM to generate a new diff.txt.\n")
-        undo_changes(exclude='yeast.py')  # Exclude yeast.py from revert
+        undo_changes(exclude='yeast.py')
         print(f"Changes failed. Affected files saved to {yeast_dir}. See issue_log.txt for details.")
         sys.exit(1)
     
@@ -99,11 +109,10 @@ def apply_changes(snippet):
     print("Changes applied and committed.")
 
 def undo_changes(exclude=None):
-    """Undo last commit, excluding specified file if provided."""
     os.system('git reset --soft HEAD^')
     os.system('git restore --staged .')
     if exclude:
-        os.system(f'git checkout HEAD -- {exclude}')  # Restore excluded file to committed state
+        os.system(f'git checkout HEAD -- {exclude}')
     else:
         os.system('git restore .')
     print(f"Last yeast changes undone{' (kept ' + exclude + ')' if exclude else ''}.")
