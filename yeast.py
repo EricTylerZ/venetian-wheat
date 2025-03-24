@@ -1,6 +1,7 @@
+#yeast.py
 """
 Yeast: Applies Git-style patch changes with context awareness.
-Uses clear revert messaging.
+Saves the last committed file on failure for LLM debugging.
 """
 
 import os
@@ -90,8 +91,12 @@ def apply_changes(patch_file):
         revert_to_last_commit(file_path)
     
     warnings = []
-    for file_path, lines in file_patch_lines.items():
-        new_lines, hunk_warnings = apply_patch(file_path, lines)
+    committed_files = {}
+    for file_path in file_patch_lines:
+        # Save the reverted (committed) state
+        with open(file_path, 'r', encoding='utf-8') as f:
+            committed_files[file_path] = f.read()
+        new_lines, hunk_warnings = apply_patch(file_path, file_patch_lines[file_path])
         warnings.extend([f"{file_path}: {w}" for w in hunk_warnings])
         if not hunk_warnings:
             with open(file_path, 'w', encoding='utf-8') as f:
@@ -101,14 +106,17 @@ def apply_changes(patch_file):
     if warnings:
         os.makedirs(yeast_dir, exist_ok=True)
         for file_path in file_patch_lines:
-            shutil.copy(file_path, os.path.join(yeast_dir, os.path.basename(file_path)))
+            # Save the committed version, not the failed attempt
+            with open(os.path.join(yeast_dir, os.path.basename(file_path)), 'w', encoding='utf-8') as f:
+                f.write(committed_files[file_path])
             os.system(f"git checkout HEAD -- {file_path}")
             print(f"Reverting {file_path} due to patch application failure.")
         with open(os.path.join(yeast_dir, "issue_log.txt"), 'w', encoding='utf-8') as f:
             f.write("Yeast auto-undo triggered due to errors:\n" + "\n".join(warnings) + "\n")
-            f.write("Original hashes:\n" + "\n".join(f"{fp}: {h}" for fp, h in original_hashes.items()) + "\n")
-            f.write("Copy this log into an LLM to debug.\n")
-        print(f"Changes failed. Reverted files to last commit. Saved to {yeast_dir}. See issue_log.txt.")
+            f.write("Original hashes (before patch attempt):\n" + "\n".join(f"{fp}: {h}" for fp, h in original_hashes.items()) + "\n")
+            f.write("Files saved are the last committed versions from the current branch.\n")
+            f.write("Copy this log and files into an LLM to debug.\n")
+        print(f"Changes failed. Reverted files to last commit. Saved committed versions to {yeast_dir}. See issue_log.txt.")
         sys.exit(1)
     
     commit_msg = f"yeast: Applied patch from {patch_file} - {len(file_patch_lines)} files updated"
