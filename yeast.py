@@ -1,6 +1,6 @@
 """
 Yeast: Applies Git-style patch changes with context awareness.
-Reverts files once at start, improves logging.
+Uses clear revert messaging.
 """
 
 import os
@@ -16,7 +16,7 @@ def get_file_hash(file_path):
 
 def revert_to_last_commit(file_path):
     os.system(f"git checkout HEAD -- {file_path}")
-    print(f"Reverted {file_path} to last commit.")
+    print(f"Moving {file_path} to baseline from recent commit.")
 
 def apply_patch(file_path, patch_lines):
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -85,7 +85,6 @@ def apply_changes(patch_file):
         elif current_file:
             file_patch_lines[current_file].append(line)
     
-    # Revert all files once at the start
     original_hashes = {fp: get_file_hash(fp) for fp in file_patch_lines}
     for file_path in file_patch_lines:
         revert_to_last_commit(file_path)
@@ -103,7 +102,8 @@ def apply_changes(patch_file):
         os.makedirs(yeast_dir, exist_ok=True)
         for file_path in file_patch_lines:
             shutil.copy(file_path, os.path.join(yeast_dir, os.path.basename(file_path)))
-            revert_to_last_commit(file_path)
+            os.system(f"git checkout HEAD -- {file_path}")
+            print(f"Reverting {file_path} due to patch application failure.")
         with open(os.path.join(yeast_dir, "issue_log.txt"), 'w', encoding='utf-8') as f:
             f.write("Yeast auto-undo triggered due to errors:\n" + "\n".join(warnings) + "\n")
             f.write("Original hashes:\n" + "\n".join(f"{fp}: {h}" for fp, h in original_hashes.items()) + "\n")
