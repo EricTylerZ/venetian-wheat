@@ -1,3 +1,4 @@
+#wheat/wheat_strain.py
 import subprocess
 import os
 import time
@@ -43,7 +44,7 @@ class WheatStrain:
                 print(f"Strain {self.strain_id}: Initialization failed - {str(e)}")
                 self.progress["status"] = "Barren"
                 self.progress["output"].append(f"Init failed: {str(e)[:100]}")
-        self.save_progress()
+            self.save_progress()
 
     def generate_code(self, rescue_code=None, rescue_error=None):
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
@@ -58,7 +59,7 @@ class WheatStrain:
             "messages": [{"role": "system", "content": prompt}],
             "max_tokens": self.config["max_tokens"]
         }
-        retries = 3  # Adjusted for balance between speed and reliability
+        retries = 3
         sunshine_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "logs", "sunshine")
         os.makedirs(sunshine_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
@@ -68,13 +69,18 @@ class WheatStrain:
             c = conn.cursor()
             for attempt in range(retries):
                 try:
-                    time.sleep(2)
+                    # Removed time.sleep(2) for faster execution
                     with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_request.json"), "w", encoding="utf-8") as f:
                         json.dump(payload, f, indent=2)
                     print(f"Strain {self.strain_id}: Sending coder API request (attempt {attempt + 1}/{retries})")
                     response = requests.post(self.config["venice_api_url"], headers=headers, json=payload, timeout=15) if self.api_key != "MISSING_KEY" else None
                     if not response:
-                        print(f"Strain {self.strain_id}: API request skipped due to missing key")
+                        error_msg = "API request skipped due to missing key"
+                        print(f"Strain {self.strain_id}: {error_msg}")
+                        self.progress["output"].append(error_msg)
+                        c.execute("INSERT INTO api_logs (strain_id, timestamp, request, response) VALUES (?, ?, ?, ?)",
+                                  (self.strain_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), json.dumps(payload), json.dumps({"error": error_msg})))
+                        self.progress["status"] = "Barren"
                         break
                     response.raise_for_status()
                     raw_response = response.json()
@@ -133,14 +139,14 @@ class WheatStrain:
                     self.progress["output"].append(f"Unexpected error: {str(e)[:100]}")
                     break
                 finally:
-                    if conn:
-                        conn.commit()
-                        conn.close()
+                    conn.commit()
+            conn.close()
 
     def grow_and_reap(self):
         if "API error" in self.task or not self.code:
             self.progress["status"] = "Barren"
             self.progress["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.save_progress()
             return f"[{self.progress['timestamp']}] [wheat_{self.strain_id}] [{self.task}] [Barren] [No code generated]"
         script_path = os.path.join(self.strain_dir, "script.py")
         with open(script_path, "w", encoding="utf-8") as f:
@@ -181,6 +187,7 @@ class WheatStrain:
         with db_lock:
             conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
             c = conn.cursor()
+            # Use strain_id as TEXT, but ensure consistency
             c.execute("UPDATE strains SET status = ?, output = ?, code_file = ?, test_result = ? WHERE strain_id = ?",
                       (self.progress["status"], json.dumps(self.progress["output"]), self.progress["code_file"], self.progress["test_result"], self.strain_id))
             if c.rowcount == 0:  # If no update (new strain), insert

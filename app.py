@@ -5,9 +5,9 @@ import sqlite3
 import os
 import json
 import threading
-import time  # Consolidated duplicate imports
+import time
 from datetime import datetime
-import shutil  # Added for integrate_successful_strains
+import shutil
 
 app = Flask(__name__)
 manager = FieldManager()
@@ -37,7 +37,7 @@ def init_db():
         )''')
         c.execute('''CREATE TABLE IF NOT EXISTS api_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            strain_id INTEGER,
+            strain_id INTEGER,  -- Links to strains.id
             timestamp TEXT,
             request TEXT,
             response TEXT,
@@ -59,7 +59,7 @@ def get_latest_run():
             run_id, timestamp, log = run
             c.execute("SELECT strain_id, task, status, output, code_file, test_result FROM strains WHERE run_id = ?", (run_id,))
             strains = c.fetchall()
-            manager.strains = [manager.create_strain(row[0], row[1], row[2], row[3], row[4], row[5]) for row in strains]
+            # Don’t overwrite manager.strains here—let tend_field manage them
             return log, {"timestamp": timestamp, "strains": {row[0]: {"task": row[1], "status": row[2], "output": json.loads(row[3]) if row[3] else [], "code_file": row[4], "test_result": row[5]} for row in strains}}
         conn.close()
         return None, None
@@ -145,18 +145,21 @@ def field_status():
 
 @app.route("/sow", methods=["POST"])
 def sow():
-    global sowing_in_progress, tending_thread
+    global sowing_in_progress, tending_thread, manager
     if sowing_in_progress:
         return jsonify({"message": "Sowing already in progress."}), 400
     sowing_in_progress = True
     try:
         data = request.get_json() or {}
         guidance = data.get("guidance")
-        manager = FieldManager()
+        manager = FieldManager()  # Fresh instance to avoid stale state
         manager.sow_field(guidance)
-        tending_thread = threading.Thread(target=manager.tend_field)
-        tending_thread.start()
+        if not tending_thread or not tending_thread.is_alive():
+            tending_thread = threading.Thread(target=manager.tend_field)
+            tending_thread.start()
         return jsonify({"message": f"Seeds sowed with guidance: '{guidance or 'None (Venice AI will propose)'}'"})
+    except Exception as e:
+        return jsonify({"message": f"Sowing failed: {str(e)}"}), 500
     finally:
         sowing_in_progress = False
 
@@ -209,7 +212,8 @@ def show_successful_strains():
         conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
         c = conn.cursor()
         c.execute("SELECT id FROM runs ORDER BY id DESC LIMIT 1")
-        run_id = c.fetchone()[0] if c.fetchone() else None
+        run_row = c.fetchone()
+        run_id = run_row[0] if run_row else None
         summary = "No successful strains found."
         if run_id:
             c.execute("SELECT strain_id, task, output FROM strains WHERE run_id = ? AND status = 'Fruitful'", (run_id,))
@@ -228,7 +232,8 @@ def integrate_successful_strains():
         conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
         c = conn.cursor()
         c.execute("SELECT id FROM runs ORDER BY id DESC LIMIT 1")
-        run_id = c.fetchone()[0] if c.fetchone() else None
+        run_row = c.fetchone()
+        run_id = run_row[0] if run_row else None
         integrated = []
         integrated_info = {}
 

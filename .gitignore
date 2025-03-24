@@ -10,7 +10,7 @@ wheat.db
 diff.txt
 yeast/
 
-patch.dff
+patch.diff
 
 # Python cache and compiled files
 __pycache__/

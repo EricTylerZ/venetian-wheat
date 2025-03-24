@@ -42,22 +42,19 @@ class FieldManager:
                         conn.commit()
                         tasks = self.sower.sow_seeds(guidance)
                         print(f"Got {len(tasks)} tasks from strategist: {tasks}")
-                        conn.commit()
                         while len(tasks) < 12:
                             tasks.extend(tasks[:12 - len(tasks)])
                         tasks = tasks[:12]
                         self.strains = []
-                        for i, task in enumerate(tasks):
-                            try:
-                                strain = WheatStrain(task, str(i), self.sower.coder_model)
-                                self.strains.append(strain)
-                                c.execute("INSERT INTO strains (run_id, strain_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                          (run_id, strain.strain_id, strain.task, strain.progress["status"], json.dumps(strain.progress["output"]), strain.progress["code_file"], strain.progress["test_result"]))
-                                print(f"Inserted strain {strain.strain_id} for run {run_id}")
-                                conn.commit()
-                            except Exception as e:
-                                print(f"Error creating strain {i}: {str(e)}")
-                                continue
+                        # Parallelize strain creation
+                        with ThreadPoolExecutor(max_workers=12) as executor:
+                            strain_futures = [executor.submit(WheatStrain, task, str(i), self.sower.coder_model) for i, task in enumerate(tasks)]
+                            self.strains = [future.result() for future in strain_futures]
+                        for strain in self.strains:
+                            c.execute("INSERT INTO strains (run_id, strain_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                      (run_id, strain.strain_id, strain.task, strain.progress["status"], json.dumps(strain.progress["output"]), strain.progress["code_file"], strain.progress["test_result"]))
+                            print(f"Inserted strain {strain.strain_id} for run {run_id}")
+                        conn.commit()
                         log_entry = f"Sowed {len(tasks)} strains: {', '.join(tasks)}\n"
                         c.execute("UPDATE runs SET log = log || ? WHERE id = ?", (log_entry, run_id))
                         conn.commit()
@@ -68,6 +65,7 @@ class FieldManager:
                     except Exception as e:
                         print(f"Sow field error: {str(e)}")
                         conn.rollback()
+                        raise
                     finally:
                         conn.close()
 
@@ -81,7 +79,7 @@ class FieldManager:
                     c = conn.cursor()
                     c.execute("SELECT id FROM runs ORDER BY id DESC LIMIT 1")
                     run_row = c.fetchone()
-                    run_id = run_row[0] if run_row else None  # Fixed duplicate fetch
+                    run_id = run_row[0] if run_row else None
                     if run_id:
                         c.execute("SELECT strain_id, task, status, output, code_file, test_result FROM strains WHERE run_id = ?", (run_id,))
                         strains = c.fetchall()
