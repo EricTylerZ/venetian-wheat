@@ -37,7 +37,7 @@ def init_db():
         )''')
         c.execute('''CREATE TABLE IF NOT EXISTS api_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            strain_id INTEGER,  -- Links to strains.id
+            strain_id INTEGER,
             timestamp TEXT,
             request TEXT,
             response TEXT,
@@ -59,7 +59,6 @@ def get_latest_run():
             run_id, timestamp, log = run
             c.execute("SELECT strain_id, task, status, output, code_file, test_result FROM strains WHERE run_id = ?", (run_id,))
             strains = c.fetchall()
-            # Don’t overwrite manager.strains here—let tend_field manage them
             return log, {"timestamp": timestamp, "strains": {row[0]: {"task": row[1], "status": row[2], "output": json.loads(row[3]) if row[3] else [], "code_file": row[4], "test_result": row[5]} for row in strains}}
         conn.close()
         return None, None
@@ -152,13 +151,15 @@ def sow():
     try:
         data = request.get_json() or {}
         guidance = data.get("guidance")
-        manager = FieldManager()  # Fresh instance to avoid stale state
+        manager = FieldManager()  # Fresh instance
         manager.sow_field(guidance)
+        time.sleep(1)  # Wait for sow to complete
         if not tending_thread or not tending_thread.is_alive():
             tending_thread = threading.Thread(target=manager.tend_field)
             tending_thread.start()
         return jsonify({"message": f"Seeds sowed with guidance: '{guidance or 'None (Venice AI will propose)'}'"})
     except Exception as e:
+        print(f"Sowing error: {str(e)}")
         return jsonify({"message": f"Sowing failed: {str(e)}"}), 500
     finally:
         sowing_in_progress = False

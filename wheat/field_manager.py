@@ -46,11 +46,11 @@ class FieldManager:
                             tasks.extend(tasks[:12 - len(tasks)])
                         tasks = tasks[:12]
                         self.strains = []
-                        # Parallelize strain creation
-                        with ThreadPoolExecutor(max_workers=12) as executor:
-                            strain_futures = [executor.submit(WheatStrain, task, str(i), self.sower.coder_model) for i, task in enumerate(tasks)]
-                            self.strains = [future.result() for future in strain_futures]
-                        for strain in self.strains:
+                        # Insert tasks first, then generate code
+                        for i, task in enumerate(tasks):
+                            strain = WheatStrain(task, str(i), self.sower.coder_model)
+                            strain.code = ""  # Clear code to avoid premature generation
+                            self.strains.append(strain)
                             c.execute("INSERT INTO strains (run_id, strain_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
                                       (run_id, strain.strain_id, strain.task, strain.progress["status"], json.dumps(strain.progress["output"]), strain.progress["code_file"], strain.progress["test_result"]))
                             print(f"Inserted strain {strain.strain_id} for run {run_id}")
@@ -58,6 +58,12 @@ class FieldManager:
                         log_entry = f"Sowed {len(tasks)} strains: {', '.join(tasks)}\n"
                         c.execute("UPDATE runs SET log = log || ? WHERE id = ?", (log_entry, run_id))
                         conn.commit()
+                        # Generate code in parallel after DB update
+                        with ThreadPoolExecutor(max_workers=12) as executor:
+                            executor.map(lambda s: s.generate_code(), self.strains)
+                        time.sleep(1)  # Wait for code generation
+                        for strain in self.strains:
+                            strain.save_progress()
                         c.execute("SELECT * FROM runs WHERE id = ?", (run_id,))
                         print(f"Run after commit: {c.fetchone()}")
                         c.execute("SELECT * FROM strains WHERE run_id = ?", (run_id,))
@@ -102,6 +108,7 @@ class FieldManager:
                                       (strain.progress["status"], json.dumps(strain.progress["output"]), strain.progress["code_file"], strain.progress["test_result"], strain.strain_id))
                         conn.commit()
                         conn.close()
+                time.sleep(1)  # Allow DB updates to propagate
                 for strain in self.strains[:]:
                     if not strain.is_alive():
                         result = self.reaper.evaluate(strain)
