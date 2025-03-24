@@ -7,6 +7,9 @@ field_venv/
 
 wheat.db
 
+diff.txt
+yeast/
+
 # Python cache and compiled files
 __pycache__/
 *.pyc
