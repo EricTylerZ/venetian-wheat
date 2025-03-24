@@ -69,3 +69,5 @@ wheat/token_log.json
 # IDE files
 .vscode/
 .idea/.env
+
+api_calls.log
