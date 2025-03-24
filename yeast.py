@@ -1,16 +1,27 @@
 """
 Yeast: Applies diff-like changes to files in the Venetian Wheat project.
-Enhanced to dynamically locate expected lines and report mismatches with actual locations.
+Automates hashing, reverts to last commit per file, and ensures full rollback on failure.
 """
 
 import os
 import sys
 import re
 import shutil
+import hashlib
 from datetime import datetime
 
+def get_file_hash(file_path):
+    """Compute MD5 hash of a file."""
+    with open(file_path, "rb") as f:
+        return hashlib.md5(f.read()).hexdigest()
+
+def revert_to_last_commit(file_path):
+    """Revert a single file to its last committed state."""
+    os.system(f"git checkout HEAD -- {file_path}")
+    print(f"Reverted {file_path} to last commit.")
+
 def find_line(file_path, expected_content):
-    """Find the line number of the expected content in the file, return -1 if not found."""
+    """Find the line number of the expected content, return -1 if not found."""
     with open(file_path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
     expected = expected_content.strip()
@@ -20,7 +31,7 @@ def find_line(file_path, expected_content):
     return -1
 
 def check_mismatches(file_path, diffs):
-    """Check for mismatches and report actual locations of expected lines."""
+    """Check for mismatches and report actual locations."""
     if not os.path.exists(file_path):
         return [(None, f"Error: File {file_path} not found")]
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -32,7 +43,7 @@ def check_mismatches(file_path, diffs):
             mismatches.append((None, f"Invalid diff line: {diff}"))
             continue
         action, line_num, content = match.groups()
-        line_num = int(line_num) - 1  # 0-based index
+        line_num = int(line_num) - 1  # 0-based
         if action == '-':
             if 0 <= line_num < len(lines):
                 actual = lines[line_num].strip()
@@ -52,13 +63,16 @@ def apply_changes(snippet):
     current_file = None
     changes = {}
     warnings = []
+    original_hashes = {}
     
-    # Parse snippet
+    # Parse snippet and collect files
     for line in lines:
         line = line.strip()
         if line.startswith('FILE:'):
             current_file = line.split('FILE:')[1].strip()
             changes[current_file] = []
+            original_hashes[current_file] = get_file_hash(current_file)
+            revert_to_last_commit(current_file)  # Start from last commit
         elif line.startswith('-') or line.startswith('+'):
             if current_file:
                 changes[current_file].append(line)
@@ -97,11 +111,12 @@ def apply_changes(snippet):
         os.makedirs(yeast_dir, exist_ok=True)
         for file_path in changes.keys():
             shutil.copy(file_path, os.path.join(yeast_dir, os.path.basename(file_path)))
+            revert_to_last_commit(file_path)  # Revert to last commit on failure
         with open(os.path.join(yeast_dir, "issue_log.txt"), 'w', encoding='utf-8') as f:
             f.write("Yeast auto-undo triggered due to errors:\n" + "\n".join(warnings) + "\n")
+            f.write("Original hashes:\n" + "\n".join(f"{fp}: {h}" for fp, h in original_hashes.items()) + "\n")
             f.write("Copy these files and this log into an LLM to generate a new diff.txt.\n")
-        undo_changes(exclude='yeast.py')
-        print(f"Changes failed. Affected files saved to {yeast_dir}. See issue_log.txt for details.")
+        print(f"Changes failed. Reverted files to last commit. Saved to {yeast_dir}. See issue_log.txt.")
         sys.exit(1)
     
     commit_msg = f"yeast: Applied diff changes from diff.txt - {len(changes)} files updated"
