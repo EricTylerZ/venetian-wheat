@@ -64,16 +64,30 @@ class Sower:
             tasks = [t.strip() for t in raw_response["choices"][0]["message"]["content"].strip().split("\n") if t.strip()]
             return tasks
         except requests.RequestException as e:
-            with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_error.json"), "w", encoding="utf-8") as f:
-                json.dump({"error": str(e)}, f, indent=2)
-            return [f"API error: {str(e)} - Key: {self.api_key[:4]}..."]
+            error_msg = f"API error: {str(e)} - Key: {self.api_key[:4]}..."
+            print(f"Sower failed: {error_msg}")
+            # Fallback tasks if API fails
+            return [
+                "Create a script to validate API keys locally",
+                "Write a function to log API failures",
+                "Develop a task scheduler with offline capabilities",
+                "Implement basic error handling for network issues",
+                "Generate mock documentation for wheat strains",
+                "Add a unit test for offline mode",
+                "Create a function to adjust parameters statically",
+                "Implement a local notification system",
+                "Write a helper to simulate paginated results",
+                "Refactor wheat_strain.py for offline use",
+                "Collect and analyze mock API usage data",
+                "Visualize simulated API performance metrics"
+            ]
 
     def sow_seeds(self, guidance=None):
         log_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "logs", "runs")
         latest_log = max([os.path.join(log_dir, f) for f in os.listdir(log_dir) if f.startswith("run_")] or [], default=None, key=os.path.getmtime) if os.path.exists(log_dir) else None
         log_content = open(latest_log, "r", encoding="utf-8").read() if latest_log else ""
         prompt = self.strategist_prompt + f"\nField log: {log_content[:1000]}\n" + (f"User input: {guidance}" if guidance else "No user input—sow tasks to improve wheat strains.")
-        return self.fetch_tasks(prompt)  # Single call, parsed into tasks
+        return self.fetch_tasks(prompt)
 
 if __name__ == "__main__":
     sower = Sower()

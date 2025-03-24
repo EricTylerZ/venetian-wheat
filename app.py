@@ -8,63 +8,57 @@ import threading
 import time
 from datetime import datetime
 import shutil
-from queue import Queue
 
 app = Flask(__name__)
 manager = FieldManager()
 sowing_in_progress = False
 tending_thread = None
-update_queue = Queue()  # For homepage updates
 
 def init_db():
-    from wheat.wheat_strain import db_lock
-    with db_lock:
-        conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
-        c = conn.cursor()
-        c.execute('''CREATE TABLE IF NOT EXISTS runs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            log TEXT
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS strains (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            run_id INTEGER,
-            strain_id TEXT,
-            task TEXT,
-            status TEXT,
-            output TEXT,
-            code_file TEXT,
-            test_result TEXT,
-            FOREIGN KEY (run_id) REFERENCES runs(id)
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS api_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            strain_id INTEGER,
-            timestamp TEXT,
-            request TEXT,
-            response TEXT,
-            FOREIGN KEY (strain_id) REFERENCES strains(id)
-        )''')
-        conn.commit()
-        conn.close()
+    conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT,
+        log TEXT
+    )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS strains (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id INTEGER,
+        strain_id TEXT,
+        task TEXT,
+        status TEXT,
+        output TEXT,
+        code_file TEXT,
+        test_result TEXT,
+        FOREIGN KEY (run_id) REFERENCES runs(id)
+    )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS api_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        strain_id INTEGER,
+        timestamp TEXT,
+        request TEXT,
+        response TEXT,
+        FOREIGN KEY (strain_id) REFERENCES strains(id)
+    )''')
+    conn.commit()
+    conn.close()
 
 init_db()
 
 def get_latest_run():
-    from wheat.wheat_strain import db_lock
-    with db_lock:
-        conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
-        c = conn.cursor()
-        c.execute("SELECT id, timestamp, log FROM runs ORDER BY id DESC LIMIT 1")
-        run = c.fetchone()
-        if run:
-            run_id, timestamp, log = run
-            c.execute("SELECT strain_id, task, status, output, code_file, test_result FROM strains WHERE run_id = ?", (run_id,))
-            strains = c.fetchall()
-            conn.close()
-            return log, {"timestamp": timestamp, "strains": {row[0]: {"task": row[1], "status": row[2], "output": json.loads(row[3]) if row[3] else [], "code_file": row[4], "test_result": row[5]} for row in strains}}
+    conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
+    c = conn.cursor()
+    c.execute("SELECT id, timestamp, log FROM runs ORDER BY id DESC LIMIT 1")
+    run = c.fetchone()
+    if run:
+        run_id, timestamp, log = run
+        c.execute("SELECT strain_id, task, status, output, code_file, test_result FROM strains WHERE run_id = ?", (run_id,))
+        strains = c.fetchall()
         conn.close()
-        return None, None
+        return log, {"timestamp": timestamp, "strains": {row[0]: {"task": row[1], "status": row[2], "output": json.loads(row[3]) if row[3] else [], "code_file": row[4], "test_result": row[5]} for row in strains}}
+    conn.close()
+    return None, None
 
 @app.route("/")
 def field_status():
@@ -154,10 +148,10 @@ def sow():
     try:
         data = request.get_json() or {}
         guidance = data.get("guidance")
-        manager = FieldManager()  # Fresh instance
+        manager = FieldManager()
         manager.sow_field(guidance)
         if not tending_thread or not tending_thread.is_alive():
-            tending_thread = threading.Thread(target=manager.tend_field, daemon=True)  # Daemon to allow Ctrl+C
+            tending_thread = threading.Thread(target=manager.tend_field, daemon=True)
             tending_thread.start()
         return jsonify({"message": f"Seeds sowed with guidance: '{guidance or 'None (Venice AI will propose)'}'"})
     except Exception as e:
@@ -173,7 +167,7 @@ def stream():
             log, status_data = get_latest_run()
             log = log or "Field not yet sowed."
             status = status_data["strains"] if status_data else {}
-            complete = all(s.progress["status"] in ["Fruitful", "Barren"] for s in manager.strains) if manager.strains else False
+            complete = all(info["status"] in ["Fruitful", "Barren"] for info in status.values())
             yield f"data: {json.dumps({'log': log, 'status': status, 'complete': complete})}\n\n"
             time.sleep(1)
     return Response(event_stream(), mimetype="text/event-stream")
@@ -210,64 +204,46 @@ def clear():
 
 @app.route("/success")
 def show_successful_strains():
-    from wheat.wheat_strain import db_lock
-    with db_lock:
-        conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
-        c = conn.cursor()
-        c.execute("SELECT id FROM runs ORDER BY id DESC LIMIT 1")
-        run_row = c.fetchone()
-        run_id = run_row[0] if run_row else None
-        summary = "No successful strains found."
-        if run_id:
-            c.execute("SELECT strain_id, task, output FROM strains WHERE run_id = ? AND status = 'Fruitful'", (run_id,))
-            successful = [f"Strain {row[0]}: {row[1]} - {json.loads(row[2])[-1] if row[2] else 'No output'}" for row in c.fetchall()]
-            summary = "\n".join(successful) if successful else summary
-        conn.close()
+    log, status_data = get_latest_run()
+    summary = "No successful strains found."
+    if status_data:
+        successful = [f"Strain {strain_id}: {info['task']} - {info['output'][-1] if info['output'] else 'No output'}" 
+                      for strain_id, info in status_data["strains"].items() if info["status"] == "Fruitful"]
+        summary = "\n".join(successful) if successful else summary
     return jsonify({"successful_strains": summary})
 
 @app.route("/integrate", methods=["POST"])
 def integrate_successful_strains():
-    from wheat.wheat_strain import db_lock
     wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
     success_dir = os.path.join(wheat_dir, "successful_strains")
     helpers_dir = os.path.join(wheat_dir, "helpers")
-    with db_lock:
-        conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat.db"))
-        c = conn.cursor()
-        c.execute("SELECT id FROM runs ORDER BY id DESC LIMIT 1")
-        run_row = c.fetchone()
-        run_id = run_row[0] if run_row else None
-        integrated = []
-        integrated_info = {}
+    log, status_data = get_latest_run()
+    integrated = []
+    integrated_info = {}
 
-        if run_id:
-            c.execute("SELECT strain_id, task, status, code_file FROM strains WHERE run_id = ? AND status = 'Fruitful'", (run_id,))
-            strains = c.fetchall()
-            os.makedirs(success_dir, exist_ok=True)
-            os.makedirs(helpers_dir, exist_ok=True)
+    if status_data:
+        os.makedirs(success_dir, exist_ok=True)
+        os.makedirs(helpers_dir, exist_ok=True)
+        for strain_id, info in status_data["strains"].items():
+            if info["status"] == "Fruitful" and info["code_file"] and os.path.exists(info["code_file"]):
+                filename = f"strain_{strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py"
+                dest_file = os.path.join(success_dir, filename)
+                shutil.copy(info["code_file"], dest_file)
+                helper_file = os.path.join(helpers_dir, filename)
+                shutil.copy(info["code_file"], helper_file)
+                integrated.append(filename)
+                with open(info["code_file"], "r", encoding="utf-8") as f:
+                    content = f.read()
+                    func_match = re.search(r'def (\w+)\((.*?)\):', content)
+                    func_name = func_match.group(1) if func_match else "unknown_function"
+                    params = func_match.group(2).strip() if func_match else "unknown"
+                    purpose_match = re.search(r'"""(.*?)"""', content, re.DOTALL)
+                    purpose = purpose_match.group(1).strip() if purpose_match else "Unknown purpose"
+                integrated_info[filename] = {"function": func_name, "purpose": purpose, "parameters": params}
+        with open(os.path.join(helpers_dir, "script_registry.json"), "w", encoding="utf-8") as f:
+            json.dump(integrated_info, f, indent=2)
 
-            for strain_id, task, status, code_file in strains:
-                if code_file and os.path.exists(code_file):
-                    filename = f"strain_{strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py"
-                    dest_file = os.path.join(success_dir, filename)
-                    shutil.copy(code_file, dest_file)
-                    helper_file = os.path.join(helpers_dir, filename)
-                    shutil.copy(code_file, helper_file)
-                    integrated.append(filename)
-                    with open(code_file, "r", encoding="utf-8") as f:
-                        content = f.read()
-                        func_match = re.search(r'def (\w+)\((.*?)\):', content)
-                        func_name = func_match.group(1) if func_match else "unknown_function"
-                        params = func_match.group(2).strip() if func_match else "unknown"
-                        purpose_match = re.search(r'"""(.*?)"""', content, re.DOTALL)
-                        purpose = purpose_match.group(1).strip() if purpose_match else "Unknown purpose"
-                    integrated_info[filename] = {"function": func_name, "purpose": purpose, "parameters": params}
-
-            with open(os.path.join(helpers_dir, "script_registry.json"), "w", encoding="utf-8") as f:
-                json.dump(integrated_info, f, indent=2)
-
-        conn.close()
     return jsonify({"integrated": integrated, "message": f"Integrated {len(integrated)} successful strains into wheat/helpers/."})
 
 if __name__ == "__main__":
-    app.run(port=5001)
+    app.run(port=5001, threaded=True)

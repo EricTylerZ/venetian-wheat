@@ -10,18 +10,16 @@ import random
 import re
 import threading
 
-db_lock = threading.Lock()
-
 class WheatStrain:
     def __init__(self, task, strain_id, coder_model):
         self.task = task
-        self.strain_id = strain_id
+        self.strain_id = str(strain_id)  # Ensure string
         self.coder_model = coder_model
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config.json"), "r") as f:
             self.config = json.load(f)
         self.llm_api = self.config.get("llm_api", "venice")
         self.lifespan = self.config["lifespan"]
-        self.strain_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "strains", f"wheat_{strain_id}")
+        self.strain_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "strains", f"wheat_{self.strain_id}")
         self.start_time = time.time()
         os.makedirs(self.strain_dir, exist_ok=True)
         self.progress = {
@@ -39,12 +37,8 @@ class WheatStrain:
 
     def generate_code(self, rescue_code=None, rescue_error=None):
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
-        if rescue_code and rescue_error:
-            self.progress["status"] = "Repairing"
-            prompt = f"{self.config['coder_prompt'].format(task=self.task)}\nPrevious attempt failed with error:\n{rescue_error}\nPrevious code:\n{rescue_code}"
-        else:
-            self.progress["status"] = "Growing"
-            prompt = self.config["coder_prompt"].format(task=self.task)
+        prompt = (f"{self.config['coder_prompt'].format(task=self.task)}\nPrevious attempt failed with error:\n{rescue_error}\nPrevious code:\n{rescue_code}"
+                  if rescue_code and rescue_error else self.config["coder_prompt"].format(task=self.task))
         payload = {
             "model": self.coder_model,
             "messages": [{"role": "system", "content": prompt}],
@@ -55,70 +49,70 @@ class WheatStrain:
         os.makedirs(sunshine_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
         print(f"Strain {self.strain_id}: Starting code generation")
-        with db_lock:
-            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"), timeout=15)
-            c = conn.cursor()
-            c.execute("SELECT id FROM strains WHERE strain_id = ?", (self.strain_id,))
-            db_strain_id = c.fetchone()[0] if c.fetchone() else None
-            for attempt in range(retries):
-                try:
-                    print(f"Strain {self.strain_id}: Sending coder API request (attempt {attempt + 1}/{retries})")
-                    with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_request.json"), "w", encoding="utf-8") as f:
-                        json.dump(payload, f, indent=2)
-                    response = requests.post(self.config["venice_api_url"], headers=headers, json=payload, timeout=15)
-                    response.raise_for_status()
-                    raw_response = response.json()
-                    with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_{response.status_code}.json"), "w", encoding="utf-8") as f:
-                        json.dump(raw_response, f, indent=2)
-                    if db_strain_id:
-                        c.execute("INSERT INTO api_logs (strain_id, timestamp, request, response) VALUES (?, ?, ?, ?)",
-                                  (db_strain_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), json.dumps(payload), json.dumps(raw_response)))
-                    raw_code = raw_response["choices"][0]["message"]["content"].strip()
-                    tokens_used = response.headers.get("x-total-tokens", "Unknown")
-                    self.progress["output"].append(f"Sent prompt (snippet): {prompt[:100]}...")
-                    self.progress["output"].append(f"Received response (snippet): {raw_code[:100]}...")
-                    self.progress["output"].append(f"Tokens used: {tokens_used}")
-                    print(f"Strain {self.strain_id}: Coder API response received")
-                    start = raw_code.find("```python") + 9
-                    end = raw_code.rfind("```")
-                    if start > 8 and end > start:
-                        code = raw_code[start:end].strip()
-                    else:
-                        code = raw_code
-                    code = "\n".join(line for line in code.split("\n") if not line.strip().startswith("#") and not line.strip().startswith("```"))
-                    code = re.sub(r"logging\.basicConfig$$ (.*?) $$", r"logging.basicConfig(\1, filename='logs/api_usage.log', level=logging.INFO)", code)
-                    self.code = code
-                    log_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "strains", "generated")
-                    if not os.path.exists(log_dir):
-                        os.makedirs(log_dir, exist_ok=True)
-                    self.progress["code_file"] = os.path.join(log_dir, f"wheat_{self.strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py")
-                    with open(self.progress["code_file"], "w", encoding="utf-8") as f:
-                        f.write(code)
-                    print(f"Strain {self.strain_id}: Code file saved to {self.progress['code_file']} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                    self.save_progress()
-                    break
-                except requests.RequestException as e:
-                    print(f"Strain {self.strain_id}: Coder API error - {str(e)} (attempt {attempt + 1}/{retries})")
-                    with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_error_{attempt}.json"), "w", encoding="utf-8") as f:
-                        json.dump({"error": str(e)}, f, indent=2)
-                    if db_strain_id:
-                        c.execute("INSERT INTO api_logs (strain_id, timestamp, request, response) VALUES (?, ?, ?, ?)",
-                                  (db_strain_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), json.dumps(payload), json.dumps({"error": str(e)})))
-                    if attempt == retries - 1:
-                        self.progress["status"] = "Barren"
-                        self.progress["output"].append(f"Code gen failed: {str(e)[:100]}")
-                    else:
-                        wait_time = 2 ** attempt + random.uniform(0, 1)
-                        self.progress["output"].append(f"Retrying in {wait_time:.2f}s due to: {str(e)[:100]}")
-                        time.sleep(wait_time)
-                except Exception as e:
-                    print(f"Strain {self.strain_id}: Unexpected error in generate_code - {str(e)}")
+        for attempt in range(retries):
+            try:
+                print(f"Strain {self.strain_id}: Sending coder API request (attempt {attempt + 1}/{retries})")
+                with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_request.json"), "w", encoding="utf-8") as f:
+                    json.dump(payload, f, indent=2)
+                response = requests.post(self.config["venice_api_url"], headers=headers, json=payload, timeout=15)
+                response.raise_for_status()
+                raw_response = response.json()
+                with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_{response.status_code}.json"), "w", encoding="utf-8") as f:
+                    json.dump(raw_response, f, indent=2)
+                conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"), timeout=15)
+                c = conn.cursor()
+                c.execute("SELECT id FROM strains WHERE strain_id = ?", (self.strain_id,))
+                db_strain_id = c.fetchone()[0]
+                c.execute("INSERT INTO api_logs (strain_id, timestamp, request, response) VALUES (?, ?, ?, ?)",
+                          (db_strain_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), json.dumps(payload), json.dumps(raw_response)))
+                conn.commit()
+                conn.close()
+                raw_code = raw_response["choices"][0]["message"]["content"].strip()
+                tokens_used = response.headers.get("x-total-tokens", "Unknown")
+                self.progress["output"].append(f"Sent prompt (snippet): {prompt[:100]}...")
+                self.progress["output"].append(f"Received response (snippet): {raw_code[:100]}...")
+                self.progress["output"].append(f"Tokens used: {tokens_used}")
+                print(f"Strain {self.strain_id}: Coder API response received")
+                start = raw_code.find("```python") + 9
+                end = raw_code.rfind("```")
+                code = raw_code[start:end].strip() if start > 8 and end > start else raw_code
+                code = "\n".join(line for line in code.split("\n") if not line.strip().startswith("#") and not line.strip().startswith("```"))
+                code = re.sub(r"logging\.basicConfig$$ (.*?) $$", r"logging.basicConfig(\1, filename='logs/api_usage.log', level=logging.INFO)", code)
+                self.code = code
+                log_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "strains", "generated")
+                os.makedirs(log_dir, exist_ok=True)
+                self.progress["code_file"] = os.path.join(log_dir, f"wheat_{self.strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py")
+                with open(self.progress["code_file"], "w", encoding="utf-8") as f:
+                    f.write(code)
+                print(f"Strain {self.strain_id}: Code file saved to {self.progress['code_file']} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                self.save_progress()
+                break
+            except requests.RequestException as e:
+                print(f"Strain {self.strain_id}: Coder API error - {str(e)} (attempt {attempt + 1}/{retries})")
+                with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_error_{attempt}.json"), "w", encoding="utf-8") as f:
+                    json.dump({"error": str(e)}, f, indent=2)
+                conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"), timeout=15)
+                c = conn.cursor()
+                c.execute("SELECT id FROM strains WHERE strain_id = ?", (self.strain_id,))
+                db_strain_id = c.fetchone()[0]
+                c.execute("INSERT INTO api_logs (strain_id, timestamp, request, response) VALUES (?, ?, ?, ?)",
+                          (db_strain_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), json.dumps(payload), json.dumps({"error": str(e)})))
+                conn.commit()
+                conn.close()
+                if attempt == retries - 1:
                     self.progress["status"] = "Barren"
-                    self.progress["output"].append(f"Unexpected error: {str(e)[:100]}")
-                    break
-                finally:
-                    conn.commit()
-            conn.close()
+                    self.progress["output"].append(f"Code gen failed: {str(e)[:100]}")
+                    self.save_progress()
+                else:
+                    wait_time = 2 ** attempt + random.uniform(0, 1)
+                    print(f"Strain {self.strain_id}: Retrying in {wait_time:.2f}s due to: {str(e)[:100]}")
+                    time.sleep(wait_time)
+            except Exception as e:
+                print(f"Strain {self.strain_id}: Unexpected error in generate_code - {str(e)}")
+                self.progress["status"] = "Barren"
+                self.progress["output"].append(f"Unexpected error: {str(e)[:100]}")
+                self.save_progress()
+                break
 
     def grow_and_reap(self):
         if "API error" in self.task or not self.code:
@@ -162,17 +156,16 @@ class WheatStrain:
         return fruitful
 
     def save_progress(self):
-        with db_lock:
-            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
-            c = conn.cursor()
-            c.execute("UPDATE strains SET status = ?, output = ?, code_file = ?, test_result = ? WHERE strain_id = ?",
-                      (self.progress["status"], json.dumps(self.progress["output"]), self.progress["code_file"], self.progress["test_result"], self.strain_id))
-            if c.rowcount == 0:  # If no update (new strain), insert
-                c.execute("INSERT INTO strains (run_id, strain_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                          ((c.execute("SELECT MAX(id) FROM runs").fetchone()[0] if c.execute("SELECT MAX(id) FROM runs").fetchone() else 1),
-                           self.strain_id, self.task, self.progress["status"], json.dumps(self.progress["output"]), self.progress["code_file"], self.progress["test_result"]))
-            conn.commit()
-            conn.close()
+        conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
+        c = conn.cursor()
+        c.execute("UPDATE strains SET status = ?, output = ?, code_file = ?, test_result = ? WHERE strain_id = ?",
+                  (self.progress["status"], json.dumps(self.progress["output"]), self.progress["code_file"], self.progress["test_result"], self.strain_id))
+        if c.rowcount == 0:  # If no update (new strain), insert
+            c.execute("INSERT INTO strains (run_id, strain_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                      ((c.execute("SELECT MAX(id) FROM runs").fetchone()[0] if c.execute("SELECT MAX(id) FROM runs").fetchone() else 1),
+                       self.strain_id, self.task, self.progress["status"], json.dumps(self.progress["output"]), self.progress["code_file"], self.progress["test_result"]))
+        conn.commit()
+        conn.close()
         os.makedirs(self.strain_dir, exist_ok=True)
         with open(os.path.join(self.strain_dir, "progress.json"), "w", encoding="utf-8") as f:
             json.dump(self.progress, f)
