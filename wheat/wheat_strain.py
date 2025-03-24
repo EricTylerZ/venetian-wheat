@@ -62,9 +62,9 @@ class WheatStrain:
             db_strain_id = c.fetchone()[0] if c.fetchone() else None
             for attempt in range(retries):
                 try:
+                    print(f"Strain {self.strain_id}: Sending coder API request (attempt {attempt + 1}/{retries})")
                     with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_request.json"), "w", encoding="utf-8") as f:
                         json.dump(payload, f, indent=2)
-                    print(f"Strain {self.strain_id}: Sending coder API request (attempt {attempt + 1}/{retries})")
                     response = requests.post(self.config["venice_api_url"], headers=headers, json=payload, timeout=15)
                     response.raise_for_status()
                     raw_response = response.json()
@@ -95,6 +95,7 @@ class WheatStrain:
                     with open(self.progress["code_file"], "w", encoding="utf-8") as f:
                         f.write(code)
                     print(f"Strain {self.strain_id}: Code file saved to {self.progress['code_file']} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    self.save_progress()
                     break
                 except requests.RequestException as e:
                     print(f"Strain {self.strain_id}: Coder API error - {str(e)} (attempt {attempt + 1}/{retries})")
@@ -118,7 +119,6 @@ class WheatStrain:
                 finally:
                     conn.commit()
             conn.close()
-            self.save_progress()
 
     def grow_and_reap(self):
         if "API error" in self.task or not self.code:
@@ -179,5 +179,4 @@ class WheatStrain:
 
 if __name__ == "__main__":
     strain = WheatStrain("Test task", "test123", "mistral-31-24b")
-    strain.generate_code()
     print(strain.grow_and_reap())

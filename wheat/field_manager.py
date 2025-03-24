@@ -36,6 +36,7 @@ class FieldManager:
                     c = conn.cursor()
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     try:
+                        # Step 1: Insert run and get tasks
                         c.execute("INSERT INTO runs (timestamp, log) VALUES (?, ?)", (timestamp, f"Field sowed at {time.ctime()} with coder {self.sower.coder_model}\n"))
                         run_id = c.lastrowid
                         print(f"Inserted run with ID {run_id} at {timestamp}")
@@ -45,29 +46,21 @@ class FieldManager:
                         while len(tasks) < 12:
                             tasks.extend(tasks[:12 - len(tasks)])
                         tasks = tasks[:12]
+                        log_entry = f"Sowed {len(tasks)} strains: {', '.join(tasks)}\n"
+                        c.execute("UPDATE runs SET log = log || ? WHERE id = ?", (log_entry, run_id))
+                        conn.commit()
+
+                        # Step 2: Insert strains
                         self.strains = []
-                        # Insert tasks first, then generate code
                         for i, task in enumerate(tasks):
                             strain = WheatStrain(task, str(i), self.sower.coder_model)
-                            strain.code = ""  # Clear code to avoid premature generation
                             self.strains.append(strain)
                             c.execute("INSERT INTO strains (run_id, strain_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
                                       (run_id, strain.strain_id, strain.task, strain.progress["status"], json.dumps(strain.progress["output"]), strain.progress["code_file"], strain.progress["test_result"]))
                             print(f"Inserted strain {strain.strain_id} for run {run_id}")
                         conn.commit()
-                        log_entry = f"Sowed {len(tasks)} strains: {', '.join(tasks)}\n"
-                        c.execute("UPDATE runs SET log = log || ? WHERE id = ?", (log_entry, run_id))
-                        conn.commit()
-                        # Generate code in parallel after DB update
-                        with ThreadPoolExecutor(max_workers=12) as executor:
-                            executor.map(lambda s: s.generate_code(), self.strains)
-                        time.sleep(1)  # Wait for code generation
-                        for strain in self.strains:
-                            strain.save_progress()
-                        c.execute("SELECT * FROM runs WHERE id = ?", (run_id,))
-                        print(f"Run after commit: {c.fetchone()}")
-                        c.execute("SELECT * FROM strains WHERE run_id = ?", (run_id,))
-                        print(f"Strains after commit: {c.fetchall()}")
+                        time.sleep(1)  # Delay for homepage update
+
                     except Exception as e:
                         print(f"Sow field error: {str(e)}")
                         conn.rollback()
@@ -78,24 +71,34 @@ class FieldManager:
     def tend_field(self):
         wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat")
         pause_file = os.path.join(wheat_dir, "pause.txt")
-        with self.lock:
-            if not self.strains:
-                with db_lock:
-                    conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
-                    c = conn.cursor()
-                    c.execute("SELECT id FROM runs ORDER BY id DESC LIMIT 1")
-                    run_row = c.fetchone()
-                    run_id = run_row[0] if run_row else None
-                    if run_id:
-                        c.execute("SELECT strain_id, task, status, output, code_file, test_result FROM strains WHERE run_id = ?", (run_id,))
-                        strains = c.fetchall()
-                        self.strains = [self.create_strain(row[0], row[1], row[2], row[3], row[4], row[5]) for row in strains]
-                        print(f"Loaded {len(self.strains)} strains from run {run_id}")
-                    conn.close()
-            while self.strains and not all(s.progress["status"] in ["Fruitful", "Barren"] for s in self.strains):
+        while True:
+            with self.lock:
+                if not self.strains:
+                    with db_lock:
+                        conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
+                        c = conn.cursor()
+                        c.execute("SELECT id FROM runs ORDER BY id DESC LIMIT 1")
+                        run_row = c.fetchone()
+                        run_id = run_row[0] if run_row else None
+                        if run_id:
+                            c.execute("SELECT strain_id, task, status, output, code_file, test_result FROM strains WHERE run_id = ?", (run_id,))
+                            strains = c.fetchall()
+                            self.strains = [self.create_strain(row[0], row[1], row[2], row[3], row[4], row[5]) for row in strains]
+                            print(f"Loaded {len(self.strains)} strains from run {run_id}")
+                        conn.close()
+                if not self.strains or all(s.progress["status"] in ["Fruitful", "Barren"] for s in self.strains):
+                    time.sleep(5)
+                    continue
                 if os.path.exists(pause_file):
                     time.sleep(5)
                     continue
+
+                # Step 3: Generate code
+                with ThreadPoolExecutor(max_workers=12) as executor:
+                    executor.map(lambda s: s.generate_code(), self.strains)
+                time.sleep(1)  # Delay for homepage update
+
+                # Step 4: Test strains
                 with ThreadPoolExecutor(max_workers=12) as executor:
                     results = list(executor.map(lambda s: s.grow_and_reap(), [s for s in self.strains if s.progress["status"] in ["Growing", "Repairing"]]))
                     with db_lock:
@@ -108,15 +111,17 @@ class FieldManager:
                                       (strain.progress["status"], json.dumps(strain.progress["output"]), strain.progress["code_file"], strain.progress["test_result"], strain.strain_id))
                         conn.commit()
                         conn.close()
-                time.sleep(1)  # Allow DB updates to propagate
+                time.sleep(1)  # Delay for homepage update
+
+                # Step 5: Rescue failed
                 for strain in self.strains[:]:
-                    if not strain.is_alive():
+                    if not strain.is_alive() or strain.progress["status"] == "Barren":
                         result = self.reaper.evaluate(strain)
+                        new_strain = self.reaper.reseed(strain)
                         with db_lock:
                             conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
                             c = conn.cursor()
                             c.execute("UPDATE runs SET log = log || ? WHERE id = (SELECT MAX(id) FROM runs)", (result + "\n",))
-                            new_strain = self.reaper.reseed(strain)
                             if new_strain:
                                 self.strains.append(new_strain)
                                 c.execute("INSERT INTO strains (run_id, strain_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -125,7 +130,7 @@ class FieldManager:
                             self.strains.remove(strain)
                             conn.commit()
                             conn.close()
-                time.sleep(1)
+                time.sleep(1)  # Delay for homepage update
 
 if __name__ == "__main__":
     manager = FieldManager()

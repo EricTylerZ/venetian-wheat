@@ -8,11 +8,13 @@ import threading
 import time
 from datetime import datetime
 import shutil
+from queue import Queue
 
 app = Flask(__name__)
 manager = FieldManager()
 sowing_in_progress = False
 tending_thread = None
+update_queue = Queue()  # For homepage updates
 
 def init_db():
     from wheat.wheat_strain import db_lock
@@ -59,6 +61,7 @@ def get_latest_run():
             run_id, timestamp, log = run
             c.execute("SELECT strain_id, task, status, output, code_file, test_result FROM strains WHERE run_id = ?", (run_id,))
             strains = c.fetchall()
+            conn.close()
             return log, {"timestamp": timestamp, "strains": {row[0]: {"task": row[1], "status": row[2], "output": json.loads(row[3]) if row[3] else [], "code_file": row[4], "test_result": row[5]} for row in strains}}
         conn.close()
         return None, None
@@ -153,13 +156,12 @@ def sow():
         guidance = data.get("guidance")
         manager = FieldManager()  # Fresh instance
         manager.sow_field(guidance)
-        time.sleep(1)  # Wait for sow to complete
         if not tending_thread or not tending_thread.is_alive():
-            tending_thread = threading.Thread(target=manager.tend_field)
+            tending_thread = threading.Thread(target=manager.tend_field, daemon=True)  # Daemon to allow Ctrl+C
             tending_thread.start()
         return jsonify({"message": f"Seeds sowed with guidance: '{guidance or 'None (Venice AI will propose)'}'"})
     except Exception as e:
-        print(f"Sowing error: {str(e)}")
+        print(f"Sowing failed: {str(e)}")
         return jsonify({"message": f"Sowing failed: {str(e)}"}), 500
     finally:
         sowing_in_progress = False
@@ -171,7 +173,7 @@ def stream():
             log, status_data = get_latest_run()
             log = log or "Field not yet sowed."
             status = status_data["strains"] if status_data else {}
-            complete = all(s.progress["status"] in ["Fruitful", "Barren"] for s in manager.strains) if manager.strains else True
+            complete = all(s.progress["status"] in ["Fruitful", "Barren"] for s in manager.strains) if manager.strains else False
             yield f"data: {json.dumps({'log': log, 'status': status, 'complete': complete})}\n\n"
             time.sleep(1)
     return Response(event_stream(), mimetype="text/event-stream")
@@ -190,7 +192,7 @@ def resume():
     if os.path.exists(pause_file):
         os.remove(pause_file)
     if not tending_thread or not tending_thread.is_alive():
-        tending_thread = threading.Thread(target=manager.tend_field)
+        tending_thread = threading.Thread(target=manager.tend_field, daemon=True)
         tending_thread.start()
     return "Resumed."
 
