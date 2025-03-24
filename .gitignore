@@ -10,6 +10,8 @@ wheat.db
 diff.txt
 yeast/
 
+patch.dff
+
 # Python cache and compiled files
 __pycache__/
 *.pyc
