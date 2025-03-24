@@ -1,0 +1,18 @@
+2025-03-24 14:41:06,586 - INFO - URL: https://jsonplaceholder.typicode.com/invalid - Status Code: 404 - Response: {}
+2025-03-24 14:41:07,128 - INFO - URL: https://jsonplaceholder.typicode.com/posts/1 - Status Code: 200 - Response: {'userId': 1, 'id': 1, 'title': 'sunt aut facere repellat provident occaecati excepturi optio reprehenderit', 'body': 'quia et suscipit\nsuscipit recusandae consequuntur expedita et cum\nreprehenderit molestiae ut ut quas totam\nnostrum rerum est autem sunt rem eveniet architecto'}
+2025-03-24 14:41:07,776 - INFO - URL: https://jsonplaceholder.typicode.com/invalid - Status Code: 404 - Response: {}
+2025-03-24 14:41:08,132 - INFO - URL: https://jsonplaceholder.typicode.com/posts/1 - Status Code: 200 - Response: {'userId': 1, 'id': 1, 'title': 'sunt aut facere repellat provident occaecati excepturi optio reprehenderit', 'body': 'quia et suscipit\nsuscipit recusandae consequuntur expedita et cum\nreprehenderit molestiae ut ut quas totam\nnostrum rerum est autem sunt rem eveniet architecto'}
+2025-03-24 14:41:20,256 - INFO - URL: https://jsonplaceholder.typicode.com/invalid - Status Code: 404 - Response: {}
+2025-03-24 14:41:20,734 - INFO - URL: https://jsonplaceholder.typicode.com/posts/1 - Status Code: 200 - Response: {
+  "userId": 1,
+  "id": 1,
+  "title": "sunt aut facere repellat provident occaecati excepturi optio reprehenderit",
+  "body": "quia et suscipit\nsuscipit recusandae consequuntur expedita et cum\nreprehenderit molestiae ut ut quas totam\nnostrum rerum est autem sunt rem eveniet architecto"
+}
+2025-03-24 14:41:21,523 - INFO - URL: https://jsonplaceholder.typicode.com/invalid - Status Code: 404 - Response: {}
+2025-03-24 14:41:21,993 - INFO - URL: https://jsonplaceholder.typicode.com/posts/1 - Status Code: 200 - Response: {
+  "userId": 1,
+  "id": 1,
+  "title": "sunt aut facere repellat provident occaecati excepturi optio reprehenderit",
+  "body": "quia et suscipit\nsuscipit recusandae consequuntur expedita et cum\nreprehenderit molestiae ut ut quas totam\nnostrum rerum est autem sunt rem eveniet architecto"
+}
