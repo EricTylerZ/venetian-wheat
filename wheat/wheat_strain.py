@@ -9,12 +9,14 @@ from datetime import datetime
 import random
 import re
 import threading
+from wheat.token_steward import TokenSteward
 
 class WheatStrain:
     def __init__(self, task, strain_id, coder_model):
         self.task = task
         self.strain_id = str(strain_id)  # Ensure string
         self.coder_model = coder_model
+        self.token_steward = TokenSteward()
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config.json"), "r") as f:
             self.config = json.load(f)
         self.llm_api = self.config.get("llm_api", "venice")
@@ -51,6 +53,9 @@ class WheatStrain:
         print(f"Strain {self.strain_id}: Starting code generation")
         for attempt in range(retries):
             try:
+                tokens_estimate = len(prompt) // 4 + self.config["max_tokens"]  # Rough estimate
+                if not self.token_steward.can_water(tokens_estimate):
+                    raise Exception("Token limit exceeded")
                 print(f"Strain {self.strain_id}: Sending coder API request (attempt {attempt + 1}/{retries})")
                 with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_request.json"), "w", encoding="utf-8") as f:
                     json.dump(payload, f, indent=2)
@@ -68,7 +73,8 @@ class WheatStrain:
                 conn.commit()
                 conn.close()
                 raw_code = raw_response["choices"][0]["message"]["content"].strip()
-                tokens_used = response.headers.get("x-total-tokens", "Unknown")
+                tokens_used = int(response.headers.get("x-total-tokens", tokens_estimate))
+                self.token_steward.water_used(tokens_used)
                 self.progress["output"].append(f"Sent prompt (snippet): {prompt[:100]}...")
                 self.progress["output"].append(f"Received response (snippet): {raw_code[:100]}...")
                 self.progress["output"].append(f"Tokens used: {tokens_used}")
@@ -77,7 +83,7 @@ class WheatStrain:
                 end = raw_code.rfind("```")
                 code = raw_code[start:end].strip() if start > 8 and end > start else raw_code
                 code = "\n".join(line for line in code.split("\n") if not line.strip().startswith("#") and not line.strip().startswith("```"))
-                code = re.sub(r"logging\.basicConfig$$ (.*?) $$", r"logging.basicConfig(\1, filename='logs/api_usage.log', level=logging.INFO)", code)
+                code = re.sub(r"logging\.basicConfig$$   (.*?)   $$", r"logging.basicConfig(\1, filename='logs/api_usage.log', level=logging.INFO)", code)
                 self.code = code
                 log_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "strains", "generated")
                 os.makedirs(log_dir, exist_ok=True)

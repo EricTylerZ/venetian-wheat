@@ -4,11 +4,13 @@ import requests
 import os
 import json
 from datetime import datetime
+from wheat.token_steward import TokenSteward
 
 load_dotenv(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", ".env"))
 
 class Sower:
     def __init__(self):
+        self.token_steward = TokenSteward()
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config.json"), "r") as f:
             config = json.load(f)
         self.llm_api = config.get("llm_api", "venice")
@@ -50,6 +52,10 @@ class Sower:
             "messages": [{"role": "system", "content": prompt}],
             "max_tokens": self.max_tokens
         }
+        tokens_estimate = len(prompt) // 4 + self.max_tokens  # Rough token estimate
+        if not self.token_steward.can_water(tokens_estimate):
+            print("Token limit reached; using fallback tasks")
+            return self._fallback_tasks()
         sunshine_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "logs", "sunshine")
         os.makedirs(sunshine_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
@@ -59,6 +65,8 @@ class Sower:
             response = requests.post(self.api_url, headers=headers, json=payload, timeout=self.timeout)
             response.raise_for_status()
             raw_response = response.json()
+            tokens_used = int(response.headers.get("x-total-tokens", tokens_estimate))
+            self.token_steward.water_used(tokens_used)
             with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_{response.status_code}.json"), "w", encoding="utf-8") as f:
                 json.dump(raw_response, f, indent=2)
             tasks = [t.strip() for t in raw_response["choices"][0]["message"]["content"].strip().split("\n") if t.strip()]
@@ -66,21 +74,23 @@ class Sower:
         except requests.RequestException as e:
             error_msg = f"API error: {str(e)} - Key: {self.api_key[:4]}..."
             print(f"Sower failed: {error_msg}")
-            # Fallback tasks if API fails
-            return [
-                "Create a script to validate API keys locally",
-                "Write a function to log API failures",
-                "Develop a task scheduler with offline capabilities",
-                "Implement basic error handling for network issues",
-                "Generate mock documentation for wheat strains",
-                "Add a unit test for offline mode",
-                "Create a function to adjust parameters statically",
-                "Implement a local notification system",
-                "Write a helper to simulate paginated results",
-                "Refactor wheat_strain.py for offline use",
-                "Collect and analyze mock API usage data",
-                "Visualize simulated API performance metrics"
-            ]
+            return self._fallback_tasks()
+
+    def _fallback_tasks(self):
+        return [
+            "Develop a module to monitor system resources",
+            "Create a script to log token usage trends",
+            "Add a unittest suite for token management",
+            "Implement a retry mechanism for large API calls",
+            "Build a caching system for strategist responses",
+            "Refactor sower.py for modular task generation",
+            "Write a scheduler for background task execution",
+            "Create a notification system for token limits",
+            "Develop a helper for parsing large API outputs",
+            "Implement a strain validator for complex scripts",
+            "Analyze API response times for optimization",
+            "Visualize strain success rates over time"
+        ]
 
     def sow_seeds(self, guidance=None):
         log_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "logs", "runs")
