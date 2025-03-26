@@ -21,12 +21,15 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS runs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp TEXT,
-        log TEXT
+        log TEXT,
+        prompt_tokens INTEGER DEFAULT 0,
+        completion_tokens INTEGER DEFAULT 0,
+        total_tokens INTEGER DEFAULT 0
     )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS strains (
+    c.execute('''CREATE TABLE IF NOT EXISTS seeds (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         run_id INTEGER,
-        strain_id TEXT,
+        seed_id TEXT,
         task TEXT,
         status TEXT,
         output TEXT,
@@ -36,11 +39,10 @@ def init_db():
     )''')
     c.execute('''CREATE TABLE IF NOT EXISTS api_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        strain_id INTEGER,
-        timestamp TEXT,
+        seed_id INTEGER,
         request_file TEXT,
         response_file TEXT,
-        FOREIGN KEY (strain_id) REFERENCES strains(id)
+        FOREIGN KEY (seed_id) REFERENCES seeds(id)
     )''')
     conn.commit()
     conn.close()
@@ -54,10 +56,10 @@ def get_latest_run():
     run = c.fetchone()
     if run:
         run_id, timestamp, log = run
-        c.execute("SELECT strain_id, task, status, output, code_file, test_result FROM strains WHERE run_id = ?", (run_id,))
-        strains = c.fetchall()
+        c.execute("SELECT seed_id, task, status, output, code_file, test_result FROM seeds WHERE run_id = ?", (run_id,))
+        seeds = c.fetchall()
         conn.close()
-        return log, {"timestamp": timestamp, "strains": {row[0]: {"task": row[1], "status": row[2], "output": json.loads(row[3]) if row[3] else [], "code_file": row[4], "test_result": row[5]} for row in strains}}
+        return log, {"timestamp": timestamp, "seeds": {row[0]: {"task": row[1], "status": row[2], "output": json.loads(row[3]) if row[3] else [], "code_file": row[4], "test_result": row[5]} for row in seeds}}
     conn.close()
     return None, None
 
@@ -67,21 +69,21 @@ def field_status():
     wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
     log = log or "Field not yet sowed."
     paused = os.path.exists(os.path.join(wheat_dir, "pause.txt"))
-    status = status_data["strains"] if status_data else {}
+    status = status_data["seeds"] if status_data else {}
     with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "config.json"), "r") as f:
         config = json.load(f)
 
     return render_template_string("""
         <h2>Venetian Wheat Field</h2>
         <form id="sowForm" onsubmit="sowSeeds(event)">
-            <textarea name="guidance" rows="4" cols="50" placeholder="Sow guidance (e.g., 'Improve strain logging')—leave blank for Venice AI to propose"></textarea><br>
+            <textarea name="guidance" rows="4" cols="50" placeholder="Sow guidance (e.g., 'Improve seed logging')—leave blank for Venice AI to propose"></textarea><br>
             <input type="submit" value="Sow Seeds">
         </form>
         <button onclick="fetch('/pause')">Pause</button>
         <button onclick="fetch('/resume')">Resume</button>
         <button onclick="fetch('/clear')">Clear Experiments</button>
-        <button onclick="showSuccess()">Show Successful Strains</button>
-        <button onclick="integrateStrains()">Integrate Successful Strains</button>
+        <button onclick="showSuccess()">Show Successful Seeds</button>
+        <button onclick="integrateSeeds()">Integrate Successful Seeds</button>
         <h3>Config Status</h3>
         <pre id="configDisplay">{{ config }}</pre>
         <form id="configForm" onsubmit="updateConfig(event)">
@@ -94,9 +96,9 @@ def field_status():
         <div id="processingStatus"></div>
         <table border="1" id="statusTable">
             <tr><th>Seed</th><th>Task</th><th>Status</th><th>Output</th></tr>
-            {% for strain_id, info in status.items() %}
+            {% for seed_id, info in status.items() %}
                 <tr>
-                    <td>{{ strain_id }}</td>
+                    <td>{{ seed_id }}</td>
                     <td>{{ info.task }}</td>
                     <td>{{ info.status }}</td>
                     <td>{{ info.output|join('<br>') }}</td>
@@ -118,9 +120,9 @@ def field_status():
             function showSuccess() {
                 fetch('/success')
                     .then(response => response.json())
-                    .then(data => alert(data.successful_strains));
+                    .then(data => alert(data.successful_seeds));
             }
-            function integrateStrains() {
+            function integrateSeeds() {
                 fetch('/integrate', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'}
@@ -145,9 +147,9 @@ def field_status():
                 document.getElementById('configDisplay').innerText = data.config;
                 const table = document.getElementById('statusTable');
                 table.innerHTML = '<tr><th>Seed</th><th>Task</th><th>Status</th><th>Output</th></tr>';
-                Object.entries(data.status).forEach(([strain_id, info]) => {
+                Object.entries(data.status).forEach(([seed_id, info]) => {
                     const row = table.insertRow();
-                    row.insertCell().innerText = strain_id;
+                    row.insertCell().innerText = seed_id;
                     row.insertCell().innerText = info.task;
                     row.insertCell().innerText = info.status;
                     row.insertCell().innerHTML = info.output.join('<br>');
@@ -187,7 +189,7 @@ def stream():
         while True:
             log, status_data = get_latest_run()
             log = log or "Field not yet sowed."
-            status = status_data["strains"] if status_data else {}
+            status = status_data["seeds"] if status_data else {}
             complete = all(info["status"] in ["Fruitful", "Barren"] for info in status.values())
             with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "config.json"), "r") as f:
                 config = json.load(f)
@@ -209,6 +211,7 @@ def resume():
     if os.path.exists(pause_file):
         os.remove(pause_file)
     if not tending_thread or not tending_thread.is_alive():
+        manager = FieldManager()  # Reload manager to ensure latest config
         tending_thread = threading.Thread(target=manager.tend_field, daemon=True)
         tending_thread.start()
     return "Resumed."
@@ -226,30 +229,36 @@ def clear():
     return "Cleared experiments."
 
 @app.route("/success")
-def show_successful_strains():
+def show_successful_seeds():
     log, status_data = get_latest_run()
-    summary = "No successful strains found."
+    summary = "No successful seeds found."
     if status_data:
-        successful = [f"Seed {strain_id}: {info['task']} - {info['output'][-1] if info['output'] else 'No output'}" 
-                      for strain_id, info in status_data["strains"].items() if info["status"] == "Fruitful"]
+        successful = [f"Seed {seed_id}: {info['task']} - {info['output'][-1] if info['output'] else 'No output'}" 
+                      for seed_id, info in status_data["seeds"].items() if info["status"] == "Fruitful"]
         summary = "\n".join(successful) if successful else summary
-    return jsonify({"successful_strains": summary})
+    return jsonify({"successful_seeds": summary})
 
 @app.route("/integrate", methods=["POST"])
-def integrate_successful_strains():
+def integrate_successful_seeds():
     wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
-    success_dir = os.path.join(wheat_dir, "successful_strains")
+    success_dir = os.path.join(wheat_dir, "successful_seeds")
     helpers_dir = os.path.join(wheat_dir, "helpers")
     log, status_data = get_latest_run()
     integrated = []
     integrated_info = {}
 
+    # Load existing registry if it exists
+    registry_file = os.path.join(helpers_dir, "script_registry.json")
+    if os.path.exists(registry_file):
+        with open(registry_file, "r", encoding="utf-8") as f:
+            integrated_info = json.load(f)
+
     if status_data:
         os.makedirs(success_dir, exist_ok=True)
         os.makedirs(helpers_dir, exist_ok=True)
-        for strain_id, info in status_data["strains"].items():
+        for seed_id, info in status_data["seeds"].items():
             if info["status"] == "Fruitful" and info["code_file"] and os.path.exists(info["code_file"]):
-                filename = f"seed_{strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py"
+                filename = f"seed_{seed_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py"
                 dest_file = os.path.join(success_dir, filename)
                 shutil.copy(info["code_file"], dest_file)
                 helper_file = os.path.join(helpers_dir, filename)
@@ -263,21 +272,24 @@ def integrate_successful_strains():
                     purpose_match = re.search(r'"""(.*?)"""', content, re.DOTALL)
                     purpose = purpose_match.group(1).strip() if purpose_match else "Unknown purpose"
                 integrated_info[filename] = {"function": func_name, "purpose": purpose, "parameters": params}
-        with open(os.path.join(helpers_dir, "script_registry.json"), "w", encoding="utf-8") as f:
+        with open(registry_file, "w", encoding="utf-8") as f:
             json.dump(integrated_info, f, indent=2)
 
-    return jsonify({"integrated": integrated, "message": f"Integrated {len(integrated)} successful strains into wheat/helpers/."})
+    return jsonify({"integrated": integrated, "message": f"Integrated {len(integrated)} successful seeds into wheat/helpers/."})
 
 @app.route("/update_config", methods=["POST"])
 def update_config():
+    global manager, tending_thread
     try:
         new_config = request.get_data(as_text=True)
         json.loads(new_config)  # Validate JSON
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "config.json"), "w") as f:
             f.write(new_config)
-        global manager
-        manager = FieldManager()  # Reload to apply new config
-        return jsonify({"message": "Config updated successfully."})
+        # Stop existing thread and reload manager
+        if tending_thread and tending_thread.is_alive():
+            tending_thread = None  # Let it die; new thread starts on sow/resume
+        manager = FieldManager()
+        return jsonify({"message": "Config updated successfully. Restart sowing or resume to apply changes."})
     except Exception as e:
         return jsonify({"message": f"Failed to update config: {str(e)}"}), 400
 

@@ -13,7 +13,7 @@ yeast/
 patch.diff
 
 wheat/helpers/
-wheat/successful_strains/
+wheat/successful_seeds/
 
 *.log
 
@@ -24,7 +24,7 @@ __pycache__/
 
 # Virtual environments
 wheat_*_venv/
-strain_*_venv/
+seed_*_venv/
 
 # Logs and temp files
 field_log.txt
@@ -44,9 +44,9 @@ __pycache__/
 # Virtual environments
 venv/
 
-# Logs and strain data
+# Logs and seed data
 wheat/logs/
-wheat/strains/
+wheat/seeds/
 wheat/field_log.txt
 wheat/field_status.json
 wheat/guidance.txt
@@ -62,9 +62,9 @@ __pycache__/
 # Virtual environments
 venv/
 
-# Logs and strain data
+# Logs and seed data
 wheat/logs/
-wheat/strains/
+wheat/seedss/
 wheat/field_log.txt
 wheat/field_status.json
 wheat/guidance.txt

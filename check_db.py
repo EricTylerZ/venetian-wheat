@@ -9,8 +9,8 @@ c.execute("SELECT * FROM runs")
 for row in c.fetchall():
     print(row)
 
-print("\nStrains:")
-c.execute("SELECT * FROM strains")
+print("\nSeeds:")
+c.execute("SELECT * FROM seeds")
 for row in c.fetchall():
     print(row)
 

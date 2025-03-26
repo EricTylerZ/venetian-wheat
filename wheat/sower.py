@@ -11,7 +11,6 @@ load_dotenv(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", ".en
 class Sower:
     def __init__(self):
         self.token_steward = TokenSteward()
-        # Load config and set seed count
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config.json"), "r") as f:
             config = json.load(f)
         self.llm_api = config.get("llm_api", "venice")
@@ -21,12 +20,11 @@ class Sower:
         self.timeout = config["timeout"]
         self.strategist_model = config["default_strategist_model"]
         self.coder_model = config["default_coder_model"]
-        self.seeds_per_run = config.get("seeds_per_run", 3)
+        self.seeds_per_run = config.get("seeds_per_run", 3)  # Already seeds_per_run
         self.strategist_prompt = config["strategist_prompt"].format(seeds_per_run=self.seeds_per_run)
         self.api_key = os.environ.get("VENICE_API_KEY") or "MISSING_KEY"
 
     def get_available_models(self):
-        # Fetch available models for dynamic VCU awareness
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         try:
             response = requests.get(self.models_url, headers=headers, timeout=self.timeout)
@@ -78,7 +76,6 @@ class Sower:
             return self._fallback_tasks()
 
     def _fallback_tasks(self):
-        # Fallback tasks if API fails
         return [
             "Develop a module to monitor system resources",
             "Create a script to log token usage trends",
@@ -89,19 +86,17 @@ class Sower:
             "Write a scheduler for background task execution",
             "Create a notification system for token limits",
             "Develop a helper for parsing large API outputs",
-            "Implement a strain validator for complex scripts",
+            "Implement a seed validator for complex scripts",  # Updated "strain" to "seed"
             "Analyze API response times for optimization",
-            "Visualize strain success rates over time"
-        ][:self.seeds_per_run]  # Limit to configured seed count
+            "Visualize seed success rates over time"  # Updated "strain" to "seed"
+        ][:self.seeds_per_run]
 
     def sow_seeds(self, guidance=None):
-        # Sow tasks based on config seed count
         log_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "logs", "runs")
         latest_log = max([os.path.join(log_dir, f) for f in os.listdir(log_dir) if f.startswith("run_")] or [], default=None, key=os.path.getmtime) if os.path.exists(log_dir) else None
         log_content = open(latest_log, "r", encoding="utf-8").read() if latest_log else ""
-        prompt = self.strategist_prompt + f"\nField log: {log_content[:1000]}\n" + (f"User input: {guidance}" if guidance else "No user input—sow tasks to improve wheat strains.")
+        prompt = self.strategist_prompt + f"\nField log: {log_content[:1000]}\n" + (f"User input: {guidance}" if guidance else "No user input—sow tasks to improve wheat seeds.")  # Updated "strains" to "seeds"
         tasks = self.fetch_tasks(prompt)
-        # Ensure we return exactly seeds_per_run tasks
         while len(tasks) < self.seeds_per_run:
             tasks.extend(self._fallback_tasks()[:self.seeds_per_run - len(tasks)])
         return tasks[:self.seeds_per_run]
