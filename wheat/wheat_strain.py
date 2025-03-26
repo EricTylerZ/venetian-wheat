@@ -14,7 +14,7 @@ from wheat.token_steward import TokenSteward
 class WheatStrain:
     def __init__(self, task, strain_id, coder_model):
         self.task = task
-        self.strain_id = str(strain_id)  # Ensure string
+        self.strain_id = str(strain_id)
         self.coder_model = coder_model
         self.token_steward = TokenSteward()
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config.json"), "r") as f:
@@ -53,9 +53,10 @@ class WheatStrain:
         print(f"Strain {self.strain_id}: Starting code generation")
         for attempt in range(retries):
             try:
-                tokens_estimate = len(prompt) // 4 + self.config["max_tokens"]  # Rough estimate as fallback
-                if not self.token_steward.can_water(tokens_estimate):
-                    raise Exception("Token limit exceeded")
+                tokens_estimate = len(prompt) // 4 + self.config["max_tokens"]
+                # Commented out limit check for now—tracking only
+                # if not self.token_steward.can_water(tokens_estimate, is_output=True):
+                #     raise Exception("Token limit exceeded")
                 print(f"Strain {self.strain_id}: Sending coder API request (attempt {attempt + 1}/{retries})")
                 with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_request.json"), "w", encoding="utf-8") as f:
                     json.dump(payload, f, indent=2)
@@ -73,12 +74,12 @@ class WheatStrain:
                 conn.commit()
                 conn.close()
                 raw_code = raw_response["choices"][0]["message"]["content"].strip()
-                # Use actual total_tokens from API response
-                tokens_used = raw_response.get("usage", {}).get("total_tokens", tokens_estimate)
-                self.token_steward.water_used(tokens_used)
+                prompt_tokens = raw_response.get("usage", {}).get("prompt_tokens", tokens_estimate)
+                completion_tokens = raw_response.get("usage", {}).get("completion_tokens", 0)
+                self.token_steward.water_used(prompt_tokens, completion_tokens)
                 self.progress["output"].append(f"Sent prompt (snippet): {prompt[:100]}...")
                 self.progress["output"].append(f"Received response (snippet): {raw_code[:100]}...")
-                self.progress["output"].append(f"Tokens used: {tokens_used}")
+                self.progress["output"].append(f"Tokens used: Prompt={prompt_tokens}, Completion={completion_tokens}")
                 print(f"Strain {self.strain_id}: Coder API response received")
                 start = raw_code.find("```python") + 9
                 end = raw_code.rfind("```")
