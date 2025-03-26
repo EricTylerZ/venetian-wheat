@@ -8,7 +8,7 @@ import threading
 import time
 from datetime import datetime
 import shutil
-import re  # Added for regex in integrate_successful_strains
+import re
 
 app = Flask(__name__)
 manager = FieldManager()
@@ -68,7 +68,6 @@ def field_status():
     log = log or "Field not yet sowed."
     paused = os.path.exists(os.path.join(wheat_dir, "pause.txt"))
     status = status_data["strains"] if status_data else {}
-    # Load config for display
     with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "config.json"), "r") as f:
         config = json.load(f)
 
@@ -84,7 +83,7 @@ def field_status():
         <button onclick="showSuccess()">Show Successful Strains</button>
         <button onclick="integrateStrains()">Integrate Successful Strains</button>
         <h3>Config Status</h3>
-        <pre>{{ config }}</pre>
+        <pre id="configDisplay">{{ config }}</pre>
         <form id="configForm" onsubmit="updateConfig(event)">
             <textarea name="config" rows="10" cols="50">{{ config }}</textarea><br>
             <input type="submit" value="Update Config">
@@ -94,7 +93,7 @@ def field_status():
         <h3>Field Status</h3>
         <div id="processingStatus"></div>
         <table border="1" id="statusTable">
-            <tr><th>Strain</th><th>Task</th><th>Status</th><th>Output</th></tr>
+            <tr><th>Seed</th><th>Task</th><th>Status</th><th>Output</th></tr>
             {% for strain_id, info in status.items() %}
                 <tr>
                     <td>{{ strain_id }}</td>
@@ -143,8 +142,9 @@ def field_status():
             eventSource.onmessage = function(event) {
                 const data = JSON.parse(event.data);
                 document.getElementById('log').innerText = data.log;
+                document.getElementById('configDisplay').innerText = data.config;
                 const table = document.getElementById('statusTable');
-                table.innerHTML = '<tr><th>Strain</th><th>Task</th><th>Status</th><th>Output</th></tr>';
+                table.innerHTML = '<tr><th>Seed</th><th>Task</th><th>Status</th><th>Output</th></tr>';
                 Object.entries(data.status).forEach(([strain_id, info]) => {
                     const row = table.insertRow();
                     row.insertCell().innerText = strain_id;
@@ -152,7 +152,7 @@ def field_status():
                     row.insertCell().innerText = info.status;
                     row.insertCell().innerHTML = info.output.join('<br>');
                 });
-                document.getElementById('processingStatus').innerText = data.complete ? 'Processing complete' : 'Processing strains...';
+                document.getElementById('processingStatus').innerText = data.complete ? 'Processing complete' : 'Processing seeds...';
             };
             eventSource.onerror = function() {
                 console.log('SSE error - reconnecting...');
@@ -169,7 +169,7 @@ def sow():
     try:
         data = request.get_json() or {}
         guidance = data.get("guidance")
-        manager = FieldManager()
+        manager = FieldManager()  # Fresh instance to reflect config
         manager.sow_field(guidance)
         if not tending_thread or not tending_thread.is_alive():
             tending_thread = threading.Thread(target=manager.tend_field, daemon=True)
@@ -189,7 +189,9 @@ def stream():
             log = log or "Field not yet sowed."
             status = status_data["strains"] if status_data else {}
             complete = all(info["status"] in ["Fruitful", "Barren"] for info in status.values())
-            yield f"data: {json.dumps({'log': log, 'status': status, 'complete': complete})}\n\n"
+            with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "config.json"), "r") as f:
+                config = json.load(f)
+            yield f"data: {json.dumps({'log': log, 'status': status, 'complete': complete, 'config': json.dumps(config, indent=2)})}\n\n"
             time.sleep(1)
     return Response(event_stream(), mimetype="text/event-stream")
 
@@ -228,14 +230,13 @@ def show_successful_strains():
     log, status_data = get_latest_run()
     summary = "No successful strains found."
     if status_data:
-        successful = [f"Strain {strain_id}: {info['task']} - {info['output'][-1] if info['output'] else 'No output'}" 
+        successful = [f"Seed {strain_id}: {info['task']} - {info['output'][-1] if info['output'] else 'No output'}" 
                       for strain_id, info in status_data["strains"].items() if info["status"] == "Fruitful"]
         summary = "\n".join(successful) if successful else summary
     return jsonify({"successful_strains": summary})
 
 @app.route("/integrate", methods=["POST"])
 def integrate_successful_strains():
-    # Integrate fruitful strains into helpers directory
     wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wheat")
     success_dir = os.path.join(wheat_dir, "successful_strains")
     helpers_dir = os.path.join(wheat_dir, "helpers")
@@ -248,7 +249,7 @@ def integrate_successful_strains():
         os.makedirs(helpers_dir, exist_ok=True)
         for strain_id, info in status_data["strains"].items():
             if info["status"] == "Fruitful" and info["code_file"] and os.path.exists(info["code_file"]):
-                filename = f"strain_{strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py"
+                filename = f"seed_{strain_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.py"
                 dest_file = os.path.join(success_dir, filename)
                 shutil.copy(info["code_file"], dest_file)
                 helper_file = os.path.join(helpers_dir, filename)
@@ -269,22 +270,19 @@ def integrate_successful_strains():
 
 @app.route("/update_config", methods=["POST"])
 def update_config():
-    # Update config.json dynamically
     try:
         new_config = request.get_data(as_text=True)
         json.loads(new_config)  # Validate JSON
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "config.json"), "w") as f:
             f.write(new_config)
-        # Reload manager to apply new config
         global manager
-        manager = FieldManager()
+        manager = FieldManager()  # Reload to apply new config
         return jsonify({"message": "Config updated successfully."})
     except Exception as e:
         return jsonify({"message": f"Failed to update config: {str(e)}"}), 400
 
 @app.route("/models")
 def get_models():
-    # Fetch and return available models
     from wheat.sower import Sower
     sower = Sower()
     models = sower.get_available_models()

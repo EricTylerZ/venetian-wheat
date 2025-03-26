@@ -11,7 +11,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", ".en
 class Sower:
     def __init__(self):
         self.token_steward = TokenSteward()
-        # Load config and set strain count
+        # Load config and set seed count
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config.json"), "r") as f:
             config = json.load(f)
         self.llm_api = config.get("llm_api", "venice")
@@ -21,8 +21,8 @@ class Sower:
         self.timeout = config["timeout"]
         self.strategist_model = config["default_strategist_model"]
         self.coder_model = config["default_coder_model"]
-        self.strains_per_run = config.get("strains_per_run", 12)
-        self.strategist_prompt = config["strategist_prompt"].format(strains_per_run=self.strains_per_run)
+        self.seeds_per_run = config.get("seeds_per_run", 3)
+        self.strategist_prompt = config["strategist_prompt"].format(seeds_per_run=self.seeds_per_run)
         self.api_key = os.environ.get("VENICE_API_KEY") or "MISSING_KEY"
 
     def get_available_models(self):
@@ -92,22 +92,16 @@ class Sower:
             "Implement a strain validator for complex scripts",
             "Analyze API response times for optimization",
             "Visualize strain success rates over time"
-        ][:self.strains_per_run]  # Limit to configured strain count
+        ][:self.seeds_per_run]  # Limit to configured seed count
 
     def sow_seeds(self, guidance=None):
-        # Sow tasks based on config strain count
+        # Sow tasks based on config seed count
         log_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "logs", "runs")
         latest_log = max([os.path.join(log_dir, f) for f in os.listdir(log_dir) if f.startswith("run_")] or [], default=None, key=os.path.getmtime) if os.path.exists(log_dir) else None
         log_content = open(latest_log, "r", encoding="utf-8").read() if latest_log else ""
         prompt = self.strategist_prompt + f"\nField log: {log_content[:1000]}\n" + (f"User input: {guidance}" if guidance else "No user input—sow tasks to improve wheat strains.")
         tasks = self.fetch_tasks(prompt)
-        # Ensure we return exactly strains_per_run tasks
-        while len(tasks) < self.strains_per_run:
-            tasks.extend(self._fallback_tasks()[:self.strains_per_run - len(tasks)])
-        return tasks[:self.strains_per_run]
-
-if __name__ == "__main__":
-    sower = Sower()
-    tasks = sower.sow_seeds("Focus on improving existing wheat files.")
-    for task in tasks:
-        print(task)
+        # Ensure we return exactly seeds_per_run tasks
+        while len(tasks) < self.seeds_per_run:
+            tasks.extend(self._fallback_tasks()[:self.seeds_per_run - len(tasks)])
+        return tasks[:self.seeds_per_run]

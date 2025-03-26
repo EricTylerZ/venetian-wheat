@@ -16,9 +16,9 @@ class FieldManager:
         self.reaper = Reaper()
         self.strains = []
         self.lock = threading.Lock()
-        # Load strains_per_run from config
+        # Load seeds_per_run from config
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config.json"), "r") as f:
-            self.strains_per_run = json.load(f).get("strains_per_run", 12)
+            self.seeds_per_run = json.load(f).get("seeds_per_run", 3)
 
     def create_strain(self, strain_id, task, status, output, code_file, test_result):
         strain = WheatStrain(task, strain_id, self.sower.coder_model)
@@ -33,37 +33,36 @@ class FieldManager:
 
     def sow_field(self, guidance=None):
         with self.lock:
-            if not self.strains:
-                conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
-                c = conn.cursor()
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                try:
-                    c.execute("INSERT INTO runs (timestamp, log) VALUES (?, ?)", (timestamp, f"Field sowed at {time.ctime()} with coder {self.sower.coder_model}\n"))
-                    run_id = c.lastrowid
-                    print(f"Inserted run with ID {run_id} at {timestamp}")
-                    conn.commit()
-                    tasks = self.sower.sow_seeds(guidance)  # Already respects strains_per_run
-                    print(f"Got {len(tasks)} tasks from strategist: {tasks}")
-                    log_entry = f"Sowed {len(tasks)} strains: {', '.join(tasks)}\n"
-                    c.execute("UPDATE runs SET log = log || ? WHERE id = ?", (log_entry, run_id))
-                    conn.commit()
+            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
+            c = conn.cursor()
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            try:
+                c.execute("INSERT INTO runs (timestamp, log) VALUES (?, ?)", (timestamp, f"Field sowed at {time.ctime()} with coder {self.sower.coder_model}\n"))
+                run_id = c.lastrowid
+                print(f"Inserted run with ID {run_id} at {timestamp}")
+                conn.commit()
+                tasks = self.sower.sow_seeds(guidance)
+                print(f"Got {len(tasks)} tasks from strategist: {tasks}")
+                log_entry = f"Sowed {len(tasks)} seeds: {', '.join(tasks)}\n"
+                c.execute("UPDATE runs SET log = log || ? WHERE id = ?", (log_entry, run_id))
+                conn.commit()
 
-                    self.strains = []
-                    for i, task in enumerate(tasks):
-                        strain = WheatStrain(task, str(i), self.sower.coder_model)
-                        self.strains.append(strain)
-                        c.execute("INSERT INTO strains (run_id, strain_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                  (run_id, strain.strain_id, strain.task, strain.progress["status"], json.dumps(strain.progress["output"]), strain.progress["code_file"], strain.progress["test_result"]))
-                        print(f"Inserted strain {strain.strain_id} for run {run_id}")
-                    conn.commit()
-                    time.sleep(1)
-
-                except Exception as e:
-                    print(f"Sow field error: {str(e)}")
-                    conn.rollback()
-                    raise
-                finally:
-                    conn.close()
+                self.strains = []
+                for i, task in enumerate(tasks):
+                    strain_id = str(i + 1)  # Start numbering at 1
+                    strain = WheatStrain(task, strain_id, self.sower.coder_model)
+                    self.strains.append(strain)
+                    c.execute("INSERT INTO strains (run_id, strain_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                              (run_id, strain.strain_id, strain.task, strain.progress["status"], json.dumps(strain.progress["output"]), strain.progress["code_file"], strain.progress["test_result"]))
+                    print(f"Inserted seed {strain.strain_id} for run {run_id}")
+                conn.commit()
+                time.sleep(1)
+            except Exception as e:
+                print(f"Sow field error: {str(e)}")
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
 
     def tend_field(self):
         wheat_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat")
@@ -80,7 +79,7 @@ class FieldManager:
                         c.execute("SELECT strain_id, task, status, output, code_file, test_result FROM strains WHERE run_id = ?", (run_id,))
                         strains = c.fetchall()
                         self.strains = [self.create_strain(row[0], row[1], row[2], row[3], row[4], row[5]) for row in strains]
-                        print(f"Loaded {len(self.strains)} strains from run {run_id}")
+                        print(f"Loaded {len(self.strains)} seeds from run {run_id}")
                     conn.close()
                 if not self.strains or all(s.progress["status"] in ["Fruitful", "Barren"] for s in self.strains):
                     time.sleep(5)
@@ -89,25 +88,32 @@ class FieldManager:
                     time.sleep(5)
                     continue
 
-                with ThreadPoolExecutor(max_workers=self.strains_per_run) as executor:
-                    futures = [executor.submit(s.generate_code) for s in self.strains if s.progress["status"] in ["Growing", "Repairing"]]
-                    for future in futures:
-                        future.result()
+                # Generate code with spacing to avoid API overload
+                for strain in [s for s in self.strains if s.progress["status"] in ["Growing", "Repairing"]]:
+                    strain.generate_code()
+                    time.sleep(3)  # Space out API calls by 3 seconds
                 time.sleep(1)
 
-                with ThreadPoolExecutor(max_workers=self.strains_per_run) as executor:
-                    results = list(executor.map(lambda s: s.grow_and_reap(), [s for s in self.strains if s.progress["status"] in ["Growing", "Repairing"]]))
-                    conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
-                    c = conn.cursor()
-                    for result in results:
-                        c.execute("UPDATE runs SET log = log || ? WHERE id = (SELECT MAX(id) FROM runs)", (result + "\n",))
-                    for strain in self.strains:
-                        c.execute("UPDATE strains SET status = ?, output = ?, code_file = ?, test_result = ? WHERE strain_id = ?",
-                                  (strain.progress["status"], json.dumps(strain.progress["output"]), strain.progress["code_file"], strain.progress["test_result"], strain.strain_id))
-                    conn.commit()
-                    conn.close()
+                # Test strains sequentially with delay
+                results = []
+                for strain in [s for s in self.strains if s.progress["status"] in ["Growing", "Repairing"]]:
+                    result = strain.grow_and_reap()
+                    results.append(result)
+                    time.sleep(1)  # Small delay to ensure DB writes
+                    print(f"Processed seed {strain.strain_id}: {result}")
+
+                conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
+                c = conn.cursor()
+                for result in results:
+                    c.execute("UPDATE runs SET log = log || ? WHERE id = (SELECT MAX(id) FROM runs)", (result + "\n",))
+                for strain in self.strains:
+                    c.execute("UPDATE strains SET status = ?, output = ?, code_file = ?, test_result = ? WHERE strain_id = ?",
+                              (strain.progress["status"], json.dumps(strain.progress["output"]), strain.progress["code_file"], strain.progress["test_result"], strain.strain_id))
+                conn.commit()
+                conn.close()
                 time.sleep(1)
 
+                # Rescue failed strains
                 for strain in self.strains[:]:
                     if not strain.is_alive() or strain.progress["status"] == "Barren":
                         result = self.reaper.evaluate(strain)
@@ -124,7 +130,3 @@ class FieldManager:
                         conn.commit()
                         conn.close()
                 time.sleep(1)
-
-if __name__ == "__main__":
-    manager = FieldManager()
-    manager.tend_field()

@@ -83,9 +83,3 @@ class TokenSteward:
         self.save_log()
         print(f"Tokens used: Prompt={self.data['prompt_tokens']}, Completion={self.data['completion_tokens']}, Total={self.data['total_tokens']} "
               f"(Period ends: {self.data['period_end']})")
-
-if __name__ == "__main__":
-    steward = TokenSteward()
-    print(f"Initial state: {steward.data}")
-    steward.water_used(500, 200)
-    print(f"After using 500 prompt + 200 completion: {steward.data}")
