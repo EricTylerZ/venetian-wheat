@@ -53,7 +53,7 @@ class WheatStrain:
         print(f"Strain {self.strain_id}: Starting code generation")
         for attempt in range(retries):
             try:
-                tokens_estimate = len(prompt) // 4 + self.config["max_tokens"]  # Rough estimate
+                tokens_estimate = len(prompt) // 4 + self.config["max_tokens"]  # Rough estimate as fallback
                 if not self.token_steward.can_water(tokens_estimate):
                     raise Exception("Token limit exceeded")
                 print(f"Strain {self.strain_id}: Sending coder API request (attempt {attempt + 1}/{retries})")
@@ -73,7 +73,8 @@ class WheatStrain:
                 conn.commit()
                 conn.close()
                 raw_code = raw_response["choices"][0]["message"]["content"].strip()
-                tokens_used = int(response.headers.get("x-total-tokens", tokens_estimate))
+                # Use actual total_tokens from API response
+                tokens_used = raw_response.get("usage", {}).get("total_tokens", tokens_estimate)
                 self.token_steward.water_used(tokens_used)
                 self.progress["output"].append(f"Sent prompt (snippet): {prompt[:100]}...")
                 self.progress["output"].append(f"Received response (snippet): {raw_code[:100]}...")

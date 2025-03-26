@@ -52,7 +52,7 @@ class Sower:
             "messages": [{"role": "system", "content": prompt}],
             "max_tokens": self.max_tokens
         }
-        tokens_estimate = len(prompt) // 4 + self.max_tokens  # Rough token estimate
+        tokens_estimate = len(prompt) // 4 + self.max_tokens  # Rough estimate as fallback
         if not self.token_steward.can_water(tokens_estimate):
             print("Token limit reached; using fallback tasks")
             return self._fallback_tasks()
@@ -65,7 +65,8 @@ class Sower:
             response = requests.post(self.api_url, headers=headers, json=payload, timeout=self.timeout)
             response.raise_for_status()
             raw_response = response.json()
-            tokens_used = int(response.headers.get("x-total-tokens", tokens_estimate))
+            # Use actual total_tokens from API response
+            tokens_used = raw_response.get("usage", {}).get("total_tokens", tokens_estimate)
             self.token_steward.water_used(tokens_used)
             with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_{response.status_code}.json"), "w", encoding="utf-8") as f:
                 json.dump(raw_response, f, indent=2)
