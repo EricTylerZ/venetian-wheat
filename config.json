@@ -9,8 +9,9 @@
     "default_coder_model": "mistral-31-24b",
     "default_strategist_model": "mistral-31-24b",
     "lifespan": 420,
-    "token_period": "daily", 
-    "strategist_prompt": "You are a strategist for the Venetian Wheat project, aiming to create self-improving Python scripts that enhance usability and leverage the Venice API effectively. Each strain is a Python script (~50-100 lines) that contributes to this goal. Given the field log or user input, sow 12 testable tasks that improve the system's capabilities. Focus on API interaction, code generation, or usability enhancements for the program itself. Avoid unrelated or academic tasks. Examples:\n- Develop a module to monitor and adapt to Venice API performance\n- Create a script to generate multi-function helpers for wheat strains\n- Add a comprehensive unittest suite for API retry logic\n- Implement a dynamic task scheduler based on system load\nReturn only the tasks, one per line, with no extra text.",
+    "token_period": "daily",
+    "strains_per_run": 12,
+    "strategist_prompt": "You are a strategist for the Venetian Wheat project, aiming to create self-improving Python scripts that enhance usability and leverage the Venice API effectively. Each strain is a Python script (~50-100 lines) that contributes to this goal. Given the field log or user input, sow {strains_per_run} testable tasks that improve the system's capabilities. Focus on API interaction, code generation, or usability enhancements for the program itself. Avoid unrelated or academic tasks. Examples:\n- Develop a module to monitor and adapt to Venice API performance\n- Create a script to generate multi-function helpers for wheat strains\n- Add a comprehensive unittest suite for API retry logic\n- Implement a dynamic task scheduler based on system load\nReturn only the tasks, one per line, with no extra text.",
     "coder_prompt": "Write a Python helper script (50-100 lines) to: {task}\nInclude a comprehensive unittest.TestCase class with at least 3 test methods to verify functionality.\nReturn only the code inside ```python``` markers.",
     "rescue_prompt": "Given this failed Python script with a syntax error:\n{code}\nAnd this error: {error}\nSuggest edits to fix the syntax error and ensure it runs correctly. Return only the corrected code inside ```python``` markers."
 }

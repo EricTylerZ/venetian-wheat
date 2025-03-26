@@ -11,6 +11,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", ".en
 class Sower:
     def __init__(self):
         self.token_steward = TokenSteward()
+        # Load config and set strain count
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config.json"), "r") as f:
             config = json.load(f)
         self.llm_api = config.get("llm_api", "venice")
@@ -20,10 +21,12 @@ class Sower:
         self.timeout = config["timeout"]
         self.strategist_model = config["default_strategist_model"]
         self.coder_model = config["default_coder_model"]
-        self.strategist_prompt = config["strategist_prompt"]
+        self.strains_per_run = config.get("strains_per_run", 12)
+        self.strategist_prompt = config["strategist_prompt"].format(strains_per_run=self.strains_per_run)
         self.api_key = os.environ.get("VENICE_API_KEY") or "MISSING_KEY"
 
     def get_available_models(self):
+        # Fetch available models for dynamic VCU awareness
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         try:
             response = requests.get(self.models_url, headers=headers, timeout=self.timeout)
@@ -53,10 +56,6 @@ class Sower:
             "max_tokens": self.max_tokens
         }
         tokens_estimate = len(prompt) // 4 + self.max_tokens
-        # Commented out limit check for now—tracking only
-        # if not self.token_steward.can_water(tokens_estimate):
-        #     print("Token limit reached; using fallback tasks")
-        #     return self._fallback_tasks()
         sunshine_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "logs", "sunshine")
         os.makedirs(sunshine_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
@@ -79,6 +78,7 @@ class Sower:
             return self._fallback_tasks()
 
     def _fallback_tasks(self):
+        # Fallback tasks if API fails
         return [
             "Develop a module to monitor system resources",
             "Create a script to log token usage trends",
@@ -92,14 +92,19 @@ class Sower:
             "Implement a strain validator for complex scripts",
             "Analyze API response times for optimization",
             "Visualize strain success rates over time"
-        ]
+        ][:self.strains_per_run]  # Limit to configured strain count
 
     def sow_seeds(self, guidance=None):
+        # Sow tasks based on config strain count
         log_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "logs", "runs")
         latest_log = max([os.path.join(log_dir, f) for f in os.listdir(log_dir) if f.startswith("run_")] or [], default=None, key=os.path.getmtime) if os.path.exists(log_dir) else None
         log_content = open(latest_log, "r", encoding="utf-8").read() if latest_log else ""
         prompt = self.strategist_prompt + f"\nField log: {log_content[:1000]}\n" + (f"User input: {guidance}" if guidance else "No user input—sow tasks to improve wheat strains.")
-        return self.fetch_tasks(prompt)
+        tasks = self.fetch_tasks(prompt)
+        # Ensure we return exactly strains_per_run tasks
+        while len(tasks) < self.strains_per_run:
+            tasks.extend(self._fallback_tasks()[:self.strains_per_run - len(tasks)])
+        return tasks[:self.strains_per_run]
 
 if __name__ == "__main__":
     sower = Sower()

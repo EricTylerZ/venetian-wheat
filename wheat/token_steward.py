@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 class TokenSteward:
     def __init__(self):
+        # Load config from central config.json
         config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config.json")
         with open(config_path, "r") as f:
             config = json.load(f)
@@ -14,6 +15,7 @@ class TokenSteward:
         self.load_log()
 
     def _initialize_data(self):
+        # Set up daily tracking period
         now = datetime.now()
         period_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         period_end = period_start + timedelta(days=1)
@@ -26,6 +28,7 @@ class TokenSteward:
         }
 
     def load_log(self):
+        # Load or reset token usage log
         if os.path.exists(self.file):
             try:
                 with open(self.file, "r") as f:
@@ -51,23 +54,24 @@ class TokenSteward:
             self.save_log()
 
     def save_log(self):
+        # Persist token usage to file
         with open(self.file, "w") as f:
             json.dump(self.data, f)
 
     def can_water(self, tokens_needed, is_output=False):
-        # Commented out for now—no limits enforced, just tracking
+        # No limits for now—just tracking
+        # Future: Re-enable for autonomy to throttle based on remaining VCUs
         # current_time = datetime.now()
         # period_end = datetime.fromisoformat(self.data["period_end"])
         # if current_time >= period_end:
         #     print("Daily period expired; resetting token counts.")
         #     self.data = self._initialize_data()
         #     self.save_log()
-        # # For future autonomy: Check limits based on VCU-derived token caps
-        # # e.g., if is_output: return self.data["completion_tokens"] + tokens_needed <= output_limit
-        # return self.data["total_tokens"] + tokens_needed <= total_limit
-        return True  # Always allow for now, tracking only
+        # return self.data["total_tokens"] + tokens_needed <= some_limit
+        return True
 
     def water_used(self, prompt_tokens, completion_tokens):
+        # Accumulate token usage (water) for the day
         current_time = datetime.now()
         period_end = datetime.fromisoformat(self.data["period_end"])
         if current_time >= period_end:

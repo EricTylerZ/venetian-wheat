@@ -16,6 +16,9 @@ class FieldManager:
         self.reaper = Reaper()
         self.strains = []
         self.lock = threading.Lock()
+        # Load strains_per_run from config
+        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config.json"), "r") as f:
+            self.strains_per_run = json.load(f).get("strains_per_run", 12)
 
     def create_strain(self, strain_id, task, status, output, code_file, test_result):
         strain = WheatStrain(task, strain_id, self.sower.coder_model)
@@ -35,21 +38,16 @@ class FieldManager:
                 c = conn.cursor()
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 try:
-                    # Step 1: Insert run and get tasks
                     c.execute("INSERT INTO runs (timestamp, log) VALUES (?, ?)", (timestamp, f"Field sowed at {time.ctime()} with coder {self.sower.coder_model}\n"))
                     run_id = c.lastrowid
                     print(f"Inserted run with ID {run_id} at {timestamp}")
                     conn.commit()
-                    tasks = self.sower.sow_seeds(guidance)
+                    tasks = self.sower.sow_seeds(guidance)  # Already respects strains_per_run
                     print(f"Got {len(tasks)} tasks from strategist: {tasks}")
-                    while len(tasks) < 12:
-                        tasks.extend(tasks[:12 - len(tasks)])
-                    tasks = tasks[:12]
                     log_entry = f"Sowed {len(tasks)} strains: {', '.join(tasks)}\n"
                     c.execute("UPDATE runs SET log = log || ? WHERE id = ?", (log_entry, run_id))
                     conn.commit()
 
-                    # Step 2: Insert strains
                     self.strains = []
                     for i, task in enumerate(tasks):
                         strain = WheatStrain(task, str(i), self.sower.coder_model)
@@ -58,7 +56,7 @@ class FieldManager:
                                   (run_id, strain.strain_id, strain.task, strain.progress["status"], json.dumps(strain.progress["output"]), strain.progress["code_file"], strain.progress["test_result"]))
                         print(f"Inserted strain {strain.strain_id} for run {run_id}")
                     conn.commit()
-                    time.sleep(1)  # Delay for homepage update
+                    time.sleep(1)
 
                 except Exception as e:
                     print(f"Sow field error: {str(e)}")
@@ -91,15 +89,13 @@ class FieldManager:
                     time.sleep(5)
                     continue
 
-                # Step 3: Generate code concurrently
-                with ThreadPoolExecutor(max_workers=12) as executor:
+                with ThreadPoolExecutor(max_workers=self.strains_per_run) as executor:
                     futures = [executor.submit(s.generate_code) for s in self.strains if s.progress["status"] in ["Growing", "Repairing"]]
                     for future in futures:
-                        future.result()  # Ensure all complete
+                        future.result()
                 time.sleep(1)
 
-                # Step 4: Test strains concurrently
-                with ThreadPoolExecutor(max_workers=12) as executor:
+                with ThreadPoolExecutor(max_workers=self.strains_per_run) as executor:
                     results = list(executor.map(lambda s: s.grow_and_reap(), [s for s in self.strains if s.progress["status"] in ["Growing", "Repairing"]]))
                     conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
                     c = conn.cursor()
@@ -112,7 +108,6 @@ class FieldManager:
                     conn.close()
                 time.sleep(1)
 
-                # Step 5: Rescue failed
                 for strain in self.strains[:]:
                     if not strain.is_alive() or strain.progress["status"] == "Barren":
                         result = self.reaper.evaluate(strain)

@@ -12,6 +12,9 @@ yeast/
 
 patch.diff
 
+wheat/helpers/
+wheat/successful_strains/
+
 # Python cache and compiled files
 __pycache__/
 *.pyc
