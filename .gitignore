@@ -1,52 +1,38 @@
+# Environment and secrets
 .env
-
-venv/
 .vercel
 
+# Virtual environments
+venv/
+venv/*
 field_venv/
-
-wheat.db
-
-diff.txt
-yeast/
-
-patch.diff
-
-wheat/helpers/
-wheat/successful_seeds/
-
-*.log
-
-tools/maps/*.txt
+wheat_*_venv/*
+seed_*_venv/*
 
 # Python cache and compiled files
 __pycache__/
 *.pyc
 */__pycache__/
 
-# Virtual environments
-wheat_*_venv/
-seed_*_venv/
-
 # Logs and temp files
+*.log
+api_calls.log
 field_log.txt
 field_status.json
 guidance.txt
+pause.txt
 token_log.json
 logs/
 tools/outputs/
+tools/maps/*.txt
 
-# IDE files
-.vscode/
-.idea/
-# Python cache and compiled files
-__pycache__/
-*.pyc
-
-# Virtual environments
-venv/
-
-# Logs and seed data
+# Project-specific directories and files
+wheat.db
+diff.txt
+patch.diff
+yeast/
+wheat/helpers/
+wheat/successful_seeds/
 wheat/logs/
 wheat/seeds/
 wheat/field_log.txt
@@ -56,25 +42,7 @@ wheat/pause.txt
 wheat/token_log.json
 wheat/__pycache__/
 
-#.gitignore
-# Python cache and compiled files
-__pycache__/
-*.pyc
-
-# Virtual environments
-venv/
-
-# Logs and seed data
-wheat/logs/
-wheat/seedss/
-wheat/field_log.txt
-wheat/field_status.json
-wheat/guidance.txt
-wheat/pause.txt
-wheat/token_log.json
-
 # IDE files
 .vscode/
+.idea/
 .idea/.env
-
-api_calls.log
