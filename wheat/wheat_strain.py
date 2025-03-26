@@ -14,7 +14,7 @@ from wheat.token_steward import TokenSteward
 class WheatStrain:
     def __init__(self, task, strain_id, coder_model):
         self.task = task
-        self.strain_id = strain_id  # Now starts at 1
+        self.strain_id = strain_id  # Starts at 1
         self.coder_model = coder_model
         self.token_steward = TokenSteward()
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config.json"), "r") as f:
@@ -50,17 +50,19 @@ class WheatStrain:
         sunshine_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "logs", "sunshine")
         os.makedirs(sunshine_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        request_file = f"{timestamp}_{self.llm_api}_request.json"
+        response_file = f"{timestamp}_{self.llm_api}_response.json"
         print(f"Seed {self.strain_id}: Starting code generation")
         for attempt in range(retries):
             try:
                 tokens_estimate = len(prompt) // 4 + self.config["max_tokens"]
                 print(f"Seed {self.strain_id}: Sending coder API request (attempt {attempt + 1}/{retries})")
-                with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_request.json"), "w", encoding="utf-8") as f:
+                with open(os.path.join(sunshine_dir, request_file), "w", encoding="utf-8") as f:
                     json.dump(payload, f, indent=2)
                 response = requests.post(self.config["venice_api_url"], headers=headers, json=payload, timeout=self.config["timeout"])
                 response.raise_for_status()
                 raw_response = response.json()
-                with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_{response.status_code}.json"), "w", encoding="utf-8") as f:
+                with open(os.path.join(sunshine_dir, response_file), "w", encoding="utf-8") as f:
                     json.dump(raw_response, f, indent=2)
                 conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"), timeout=15)
                 c = conn.cursor()
@@ -70,8 +72,8 @@ class WheatStrain:
                     db_strain_id = result[0]
                 else:
                     raise ValueError(f"Seed {self.strain_id} not found in database")
-                c.execute("INSERT INTO api_logs (strain_id, timestamp, request, response) VALUES (?, ?, ?, ?)",
-                          (db_strain_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), json.dumps(payload), json.dumps(raw_response)))
+                c.execute("INSERT INTO api_logs (strain_id, timestamp, request_file, response_file) VALUES (?, ?, ?, ?)",
+                          (db_strain_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), request_file, response_file))
                 conn.commit()
                 conn.close()
                 raw_code = raw_response["choices"][0]["message"]["content"].strip()
@@ -97,19 +99,17 @@ class WheatStrain:
                 self.save_progress()
                 break
             except requests.RequestException as e:
+                error_file = f"{timestamp}_{self.llm_api}_error_{attempt}.json"
                 print(f"Seed {self.strain_id}: Coder API error - {str(e)} (attempt {attempt + 1}/{retries})")
-                with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_error_{attempt}.json"), "w", encoding="utf-8") as f:
+                with open(os.path.join(sunshine_dir, error_file), "w", encoding="utf-8") as f:
                     json.dump({"error": str(e)}, f, indent=2)
                 conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"), timeout=15)
                 c = conn.cursor()
                 c.execute("SELECT id FROM strains WHERE strain_id = ?", (self.strain_id,))
                 result = c.fetchone()
-                if result:
-                    db_strain_id = result[0]
-                else:
-                    db_strain_id = None  # Log even if not found yet
-                c.execute("INSERT INTO api_logs (strain_id, timestamp, request, response) VALUES (?, ?, ?, ?)",
-                          (db_strain_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), json.dumps(payload), json.dumps({"error": str(e)})))
+                db_strain_id = result[0] if result else None
+                c.execute("INSERT INTO api_logs (strain_id, timestamp, request_file, response_file) VALUES (?, ?, ?, ?)",
+                          (db_strain_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), request_file, error_file))
                 conn.commit()
                 conn.close()
                 if attempt == retries - 1:

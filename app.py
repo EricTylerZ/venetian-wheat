@@ -38,8 +38,8 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         strain_id INTEGER,
         timestamp TEXT,
-        request TEXT,
-        response TEXT,
+        request_file TEXT,
+        response_file TEXT,
         FOREIGN KEY (strain_id) REFERENCES strains(id)
     )''')
     conn.commit()
@@ -169,7 +169,7 @@ def sow():
     try:
         data = request.get_json() or {}
         guidance = data.get("guidance")
-        manager = FieldManager()  # Fresh instance to reflect config
+        manager = FieldManager()  # Fresh instance to reflect latest config
         manager.sow_field(guidance)
         if not tending_thread or not tending_thread.is_alive():
             tending_thread = threading.Thread(target=manager.tend_field, daemon=True)

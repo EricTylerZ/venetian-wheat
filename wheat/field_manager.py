@@ -16,7 +16,6 @@ class FieldManager:
         self.reaper = Reaper()
         self.strains = []
         self.lock = threading.Lock()
-        # Load seeds_per_run from config
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config.json"), "r") as f:
             self.seeds_per_run = json.load(f).get("seeds_per_run", 3)
 
@@ -49,7 +48,7 @@ class FieldManager:
 
                 self.strains = []
                 for i, task in enumerate(tasks):
-                    strain_id = str(i + 1)  # Start numbering at 1
+                    strain_id = str(i + 1)  # Start at 1
                     strain = WheatStrain(task, strain_id, self.sower.coder_model)
                     self.strains.append(strain)
                     c.execute("INSERT INTO strains (run_id, strain_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -88,20 +87,22 @@ class FieldManager:
                     time.sleep(5)
                     continue
 
-                # Generate code with spacing to avoid API overload
-                for strain in [s for s in self.strains if s.progress["status"] in ["Growing", "Repairing"]]:
-                    strain.generate_code()
-                    time.sleep(3)  # Space out API calls by 3 seconds
+                # Generate code with staggered concurrency
+                growing_strains = [s for s in self.strains if s.progress["status"] in ["Growing", "Repairing"]]
+                with ThreadPoolExecutor(max_workers=self.seeds_per_run) as executor:
+                    futures = []
+                    for i, strain in enumerate(growing_strains):
+                        time.sleep(i)  # Stagger start by 1s per seed
+                        futures.append(executor.submit(strain.generate_code))
+                    for future in futures:
+                        future.result()  # Wait for all to complete
                 time.sleep(1)
 
-                # Test strains sequentially with delay
+                # Test strains concurrently
                 results = []
-                for strain in [s for s in self.strains if s.progress["status"] in ["Growing", "Repairing"]]:
-                    result = strain.grow_and_reap()
-                    results.append(result)
-                    time.sleep(1)  # Small delay to ensure DB writes
-                    print(f"Processed seed {strain.strain_id}: {result}")
-
+                with ThreadPoolExecutor(max_workers=self.seeds_per_run) as executor:
+                    futures = [executor.submit(s.grow_and_reap) for s in growing_strains]
+                    results = [future.result() for future in futures]
                 conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
                 c = conn.cursor()
                 for result in results:
@@ -111,6 +112,7 @@ class FieldManager:
                               (strain.progress["status"], json.dumps(strain.progress["output"]), strain.progress["code_file"], strain.progress["test_result"], strain.strain_id))
                 conn.commit()
                 conn.close()
+                print(f"Updated database with {len(results)} results")
                 time.sleep(1)
 
                 # Rescue failed strains
