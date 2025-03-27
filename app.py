@@ -1,4 +1,4 @@
-#app.py
+# app.py
 from flask import Flask, request, render_template_string, jsonify, Response
 from wheat.field_manager import FieldManager
 import sqlite3
@@ -9,6 +9,7 @@ import time
 from datetime import datetime
 import shutil
 import re
+from tools.stewards_map import get_stewards_map, get_map_as_string
 
 app = Flask(__name__)
 manager = FieldManager()
@@ -170,15 +171,49 @@ def sow():
     sowing_in_progress = True
     try:
         data = request.get_json() or {}
-        guidance = data.get("guidance")
-        manager = FieldManager()  # Fresh instance to reflect latest config
-        manager.sow_field(guidance)
+        guidance = data.get("guidance") or "No user input—sow tasks to improve wheat seeds."
+        
+        # Save the stewards map to a file for backtracking
+        get_stewards_map(include_params=True, include_descriptions=True)
+        
+        # Get the stewards map as a string for prompts
+        stewards_map_str = get_map_as_string(include_params=True, include_descriptions=True)
+        
+        # Load config
+        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "config.json"), "r") as f:
+            config = json.load(f)
+        
+        # Format strategist_prompt with the map string
+        strategist_prompt = config["strategist_prompt"].format(
+            stewards_map=stewards_map_str,
+            file_contents=stewards_map_str,  # Use tree instead of file contents
+            seeds_per_run=config["seeds_per_run"],
+            guidance=guidance
+        )
+        
+        # Pass coder_prompt as the raw template with tree substituted
+        coder_prompt_template = config["coder_prompt"].format(
+            stewards_map=stewards_map_str,
+            file_contents=stewards_map_str,  # Use tree instead of file contents
+            task="{task}"  # Keep as placeholder
+        )
+        
+        # Debug prints to verify types and content
+        print(f"Type of stewards_map_str: {type(stewards_map_str)}")
+        print(f"Type of strategist_prompt: {type(strategist_prompt)}")
+        print(f"Type of coder_prompt_template: {type(coder_prompt_template)}")
+        print(f"coder_prompt_template content: {coder_prompt_template[:200]}...")  # Truncated for brevity
+        
+        manager = FieldManager()
+        manager.sow_field(guidance, strategist_prompt=strategist_prompt, coder_prompt=coder_prompt_template)
         if not tending_thread or not tending_thread.is_alive():
             tending_thread = threading.Thread(target=manager.tend_field, daemon=True)
             tending_thread.start()
-        return jsonify({"message": f"Seeds sowed with guidance: '{guidance or 'None (Venice AI will propose)'}'"})
+        return jsonify({"message": f"Seeds sowed with guidance: '{guidance}'"})
     except Exception as e:
         print(f"Sowing failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"message": f"Sowing failed: {str(e)}"}), 500
     finally:
         sowing_in_progress = False
@@ -211,7 +246,7 @@ def resume():
     if os.path.exists(pause_file):
         os.remove(pause_file)
     if not tending_thread or not tending_thread.is_alive():
-        manager = FieldManager()  # Reload manager to ensure latest config
+        manager = FieldManager()
         tending_thread = threading.Thread(target=manager.tend_field, daemon=True)
         tending_thread.start()
     return "Resumed."
@@ -223,7 +258,7 @@ def clear():
     pause_file = os.path.join(wheat_dir, "pause.txt")
     if os.path.exists(pause_file):
         os.remove(pause_file)
-    manager.strains = []
+    manager.seeds = []
     if tending_thread and tending_thread.is_alive():
         tending_thread = None
     return "Cleared experiments."
@@ -247,7 +282,6 @@ def integrate_successful_seeds():
     integrated = []
     integrated_info = {}
 
-    # Load existing registry if it exists
     registry_file = os.path.join(helpers_dir, "script_registry.json")
     if os.path.exists(registry_file):
         with open(registry_file, "r", encoding="utf-8") as f:
@@ -282,12 +316,11 @@ def update_config():
     global manager, tending_thread
     try:
         new_config = request.get_data(as_text=True)
-        json.loads(new_config)  # Validate JSON
+        json.loads(new_config)
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "config.json"), "w") as f:
             f.write(new_config)
-        # Stop existing thread and reload manager
         if tending_thread and tending_thread.is_alive():
-            tending_thread = None  # Let it die; new thread starts on sow/resume
+            tending_thread = None
         manager = FieldManager()
         return jsonify({"message": "Config updated successfully. Restart sowing or resume to apply changes."})
     except Exception as e:

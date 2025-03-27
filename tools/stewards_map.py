@@ -123,6 +123,40 @@ def visualize_and_save_tree(tree, output_dir="tools/maps"):
     print(f"Map saved to {output_file}")
     return tree_str
 
+# New helper function to get the map as a string
+def get_map_as_string(include_params=True, include_descriptions=False):
+    """Generate the stewards map and return it as a formatted string."""
+    root_dir = Path(__file__).parent.parent  # Two levels up from tools/
+    log_file = root_dir / "tools" / "maps" / "errors.log"
+    log_file.parent.mkdir(exist_ok=True)
+    tree = build_stewards_map(root_dir, log_file, include_params, include_descriptions)
+    
+    # Format the tree into a string
+    header = """# Steward's Map Explanation
+# This map provides a high-level overview of the project's Python files and their functions.
+# It is intended for stewards (LLMs and humans) to understand the code structure and identify areas for improvement.
+# Use this map to:
+# - Add new features (e.g., expand self-growing logic in Venetian Wheat)
+# - Optimize existing functions for better performance
+# - Refactor code for improved readability or maintainability
+# - Fix bugs or enhance functionality in the project files
+"""
+    
+    tree_str = header + f"\n{tree['root']}/\n"
+    files = sorted(tree["files"].items())
+    for i, (path, details) in enumerate(files):
+        prefix = "└──" if i == len(files) - 1 else "├──"
+        if "note" in details:
+            tree_str += f"{prefix} {path} - {details['note']}\n"
+        else:
+            tree_str += f"{prefix} {path}\n"
+            functions = details.get("functions", [])
+            for j, func in enumerate(functions):
+                func_prefix = "    └──" if j == len(functions) - 1 else "    ├──"
+                tree_str += f"{func_prefix} {func}\n"
+    
+    return tree_str
+
 # Main function
 def get_stewards_map(include_params=True, include_descriptions=False):
     """Generate and save the stewards map."""

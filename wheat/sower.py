@@ -20,8 +20,8 @@ class Sower:
         self.timeout = config["timeout"]
         self.strategist_model = config["default_strategist_model"]
         self.coder_model = config["default_coder_model"]
-        self.seeds_per_run = config.get("seeds_per_run", 3)  # Already seeds_per_run
-        self.strategist_prompt = config["strategist_prompt"].format(seeds_per_run=self.seeds_per_run)
+        self.seeds_per_run = config.get("seeds_per_run", 3)
+        self.strategist_prompt = config["strategist_prompt"]
         self.api_key = os.environ.get("VENICE_API_KEY") or "MISSING_KEY"
 
     def get_available_models(self):
@@ -66,7 +66,7 @@ class Sower:
             prompt_tokens = raw_response.get("usage", {}).get("prompt_tokens", tokens_estimate)
             completion_tokens = raw_response.get("usage", {}).get("completion_tokens", 0)
             self.token_steward.water_used(prompt_tokens, completion_tokens)
-            with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_{response.status_code}.json"), "w", encoding="utf-8") as f:
+            with open(os.path.join(sunshine_dir, f"{timestamp}_{self.llm_api}_200.json"), "w", encoding="utf-8") as f:
                 json.dump(raw_response, f, indent=2)
             tasks = [t.strip() for t in raw_response["choices"][0]["message"]["content"].strip().split("\n") if t.strip()]
             return tasks
@@ -86,16 +86,19 @@ class Sower:
             "Write a scheduler for background task execution",
             "Create a notification system for token limits",
             "Develop a helper for parsing large API outputs",
-            "Implement a seed validator for complex scripts",  # Updated "strain" to "seed"
+            "Implement a seed validator for complex scripts",
             "Analyze API response times for optimization",
-            "Visualize seed success rates over time"  # Updated "strain" to "seed"
+            "Visualize seed success rates over time"
         ][:self.seeds_per_run]
 
-    def sow_seeds(self, guidance=None):
+    def sow_seeds(self, guidance=None, strategist_prompt=None):
         log_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "logs", "runs")
         latest_log = max([os.path.join(log_dir, f) for f in os.listdir(log_dir) if f.startswith("run_")] or [], default=None, key=os.path.getmtime) if os.path.exists(log_dir) else None
         log_content = open(latest_log, "r", encoding="utf-8").read() if latest_log else ""
-        prompt = self.strategist_prompt + f"\nField log: {log_content[:1000]}\n" + (f"User input: {guidance}" if guidance else "No user input—sow tasks to improve wheat seeds.")  # Updated "strains" to "seeds"
+        # Use provided strategist_prompt or default
+        prompt = strategist_prompt if strategist_prompt else self.strategist_prompt.format(
+            stewards_map="", file_contents="", seeds_per_run=self.seeds_per_run, guidance=guidance or "No user input—sow tasks to improve wheat seeds."
+        )
         tasks = self.fetch_tasks(prompt)
         while len(tasks) < self.seeds_per_run:
             tasks.extend(self._fallback_tasks()[:self.seeds_per_run - len(tasks)])

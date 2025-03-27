@@ -1,6 +1,6 @@
-#wheat/field_manager.py
+# wheat/field_manager.py
 from wheat.sower import Sower
-from wheat.wheat_seed import WheatSeed  # Updated import
+from wheat.wheat_seed import WheatSeed
 from wheat.reaper import Reaper
 from concurrent.futures import ThreadPoolExecutor
 import sqlite3
@@ -9,17 +9,18 @@ import json
 import threading
 import time
 from datetime import datetime
+from tools.stewards_map import get_map_as_string
 
 class FieldManager:
     def __init__(self):
         self.sower = Sower()
         self.reaper = Reaper()
-        self.seeds = []  # Changed from strains to seeds
+        self.seeds = []
         self.lock = threading.Lock()
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config.json"), "r") as f:
             self.seeds_per_run = json.load(f).get("seeds_per_run", 3)
 
-    def create_seed(self, seed_id, task, status, output, code_file, test_result):
+    def create_seed(self, seed_id, task, status, output, code_file, test_result, coder_prompt=None):
         seed = WheatSeed(task, seed_id, self.sower.coder_model)
         seed.progress = {
             "task": task,
@@ -28,9 +29,10 @@ class FieldManager:
             "code_file": code_file or "",
             "test_result": test_result or ""
         }
+        seed.coder_prompt = coder_prompt  # Store the formatted prompt
         return seed
 
-    def sow_field(self, guidance=None):
+    def sow_field(self, guidance=None, strategist_prompt=None, coder_prompt=None):
         with self.lock:
             conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wheat.db"))
             c = conn.cursor()
@@ -40,16 +42,27 @@ class FieldManager:
                 run_id = c.lastrowid
                 print(f"Inserted run with ID {run_id} at {timestamp}")
                 conn.commit()
-                tasks = self.sower.sow_seeds(guidance)
+                tasks = self.sower.sow_seeds(guidance, strategist_prompt=strategist_prompt)
                 print(f"Got {len(tasks)} tasks from strategist: {tasks}")
                 log_entry = f"Sowed {len(tasks)} seeds: {', '.join(tasks)}\n"
                 c.execute("UPDATE runs SET log = log || ? WHERE id = ?", (log_entry, run_id))
                 conn.commit()
 
                 self.seeds = []
+                # Use the stewards map as file_contents
+                stewards_map_str = get_map_as_string(include_params=True, include_descriptions=True)
+
                 for i, task in enumerate(tasks):
-                    seed_id = str(i + 1)  # Start at 1
+                    seed_id = str(i + 1)
+                    # Format coder_prompt with all placeholders for each seed
+                    formatted_coder_prompt = coder_prompt.format(
+                        stewards_map=stewards_map_str,
+                        file_contents=stewards_map_str,
+                        task=task
+                    ) if coder_prompt else None
+                    print(f"Formatted coder_prompt for seed {seed_id}: {formatted_coder_prompt[:200]}...")  # Truncated for brevity
                     seed = WheatSeed(task, seed_id, self.sower.coder_model)
+                    seed.coder_prompt = formatted_coder_prompt
                     self.seeds.append(seed)
                     c.execute("INSERT INTO seeds (run_id, seed_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
                               (run_id, seed.seed_id, seed.task, seed.progress["status"], json.dumps(seed.progress["output"]), seed.progress["code_file"], seed.progress["test_result"]))
@@ -87,18 +100,16 @@ class FieldManager:
                     time.sleep(5)
                     continue
 
-                # Generate code with staggered concurrency
                 growing_seeds = [s for s in self.seeds if s.progress["status"] in ["Growing", "Repairing"]]
                 with ThreadPoolExecutor(max_workers=self.seeds_per_run) as executor:
                     futures = []
                     for i, seed in enumerate(growing_seeds):
-                        time.sleep(i)  # Stagger start by 1s per seed
-                        futures.append(executor.submit(seed.generate_code))
+                        time.sleep(i)
+                        futures.append(executor.submit(seed.generate_code, coder_prompt=seed.coder_prompt))
                     for future in futures:
-                        future.result()  # Wait for all to complete
+                        future.result()
                 time.sleep(1)
 
-                # Test seeds concurrently
                 results = []
                 with ThreadPoolExecutor(max_workers=self.seeds_per_run) as executor:
                     futures = [executor.submit(s.grow_and_reap) for s in growing_seeds]
@@ -115,7 +126,6 @@ class FieldManager:
                 print(f"Updated database with {len(results)} results")
                 time.sleep(1)
 
-                # Rescue failed seeds
                 for seed in self.seeds[:]:
                     if not seed.is_alive() or seed.progress["status"] == "Barren":
                         result = self.reaper.evaluate(seed)

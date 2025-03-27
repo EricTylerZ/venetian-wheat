@@ -1,4 +1,4 @@
-#wheat/wheat_seed.py
+# wheat/wheat_seed.py
 import subprocess
 import os
 import time
@@ -14,7 +14,7 @@ from wheat.token_steward import TokenSteward
 class WheatSeed:
     def __init__(self, task, seed_id, coder_model):
         self.task = task
-        self.seed_id = seed_id  # Starts at 1
+        self.seed_id = seed_id
         self.coder_model = coder_model
         self.token_steward = TokenSteward()
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config.json"), "r") as f:
@@ -36,11 +36,16 @@ class WheatSeed:
         self.code = ""
         self.api_key = os.environ.get("VENICE_API_KEY") or "MISSING_KEY"
         self.retry_count = 0
+        self.coder_prompt = None  # Will be set by FieldManager
 
-    def generate_code(self, rescue_code=None, rescue_error=None):
+    def generate_code(self, rescue_code=None, rescue_error=None, coder_prompt=None):
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
-        prompt = (f"{self.config['coder_prompt'].format(task=self.task)}\nPrevious attempt failed with error:\n{rescue_error}\nPrevious code:\n{rescue_code}"
-                  if rescue_code and rescue_error else self.config["coder_prompt"].format(task=self.task))
+        # Use provided coder_prompt or default
+        if coder_prompt:
+            prompt = coder_prompt
+        else:
+            prompt = (f"{self.config['coder_prompt'].format(task=self.task, stewards_map='', file_contents='')}\nPrevious attempt failed with error:\n{rescue_error}\nPrevious code:\n{rescue_code}"
+                      if rescue_code and rescue_error else self.config["coder_prompt"].format(task=self.task, stewards_map='', file_contents=''))
         payload = {
             "model": self.coder_model,
             "messages": [{"role": "system", "content": prompt}],
@@ -51,7 +56,7 @@ class WheatSeed:
         os.makedirs(sunshine_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
         request_file = f"{timestamp}_{self.llm_api}_request.json"
-        response_file = f"{timestamp}_{self.llm_api}_200.json"  # Consistent naming for success
+        response_file = f"{timestamp}_{self.llm_api}_200.json"
         print(f"Seed {self.seed_id}: Starting code generation")
         for attempt in range(retries):
             try:
@@ -75,7 +80,6 @@ class WheatSeed:
                 c.execute("INSERT INTO api_logs (seed_id, request_file, response_file) VALUES (?, ?, ?)",
                           (db_seed_id, request_file, response_file))
                 conn.commit()
-                # Update run-level token counts
                 prompt_tokens = raw_response.get("usage", {}).get("prompt_tokens", tokens_estimate)
                 completion_tokens = raw_response.get("usage", {}).get("completion_tokens", 0)
                 c.execute("UPDATE runs SET prompt_tokens = prompt_tokens + ?, completion_tokens = completion_tokens + ?, total_tokens = total_tokens + ? WHERE id = (SELECT MAX(id) FROM runs)",
@@ -175,7 +179,7 @@ class WheatSeed:
         c = conn.cursor()
         c.execute("UPDATE seeds SET status = ?, output = ?, code_file = ?, test_result = ? WHERE seed_id = ?",
                   (self.progress["status"], json.dumps(self.progress["output"]), self.progress["code_file"], self.progress["test_result"], self.seed_id))
-        if c.rowcount == 0:  # If no update (new seed), insert
+        if c.rowcount == 0:
             c.execute("INSERT INTO seeds (run_id, seed_id, task, status, output, code_file, test_result) VALUES (?, ?, ?, ?, ?, ?, ?)",
                       ((c.execute("SELECT MAX(id) FROM runs").fetchone()[0] if c.execute("SELECT MAX(id) FROM runs").fetchone() else 1),
                        self.seed_id, self.task, self.progress["status"], json.dumps(self.progress["output"]), self.progress["code_file"], self.progress["test_result"]))
