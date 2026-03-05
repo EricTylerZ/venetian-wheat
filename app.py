@@ -102,7 +102,7 @@ def field_status():
                     <td>{{ seed_id }}</td>
                     <td>{{ info.task }}</td>
                     <td>{{ info.status }}</td>
-                    <td>{{ info.output|join('<br>') }}</td>
+                    <td>{% for line in info.output %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
                 </tr>
             {% endfor %}
         </table>
@@ -153,7 +153,11 @@ def field_status():
                     row.insertCell().innerText = seed_id;
                     row.insertCell().innerText = info.task;
                     row.insertCell().innerText = info.status;
-                    row.insertCell().innerHTML = info.output.join('<br>');
+                    const outputCell = row.insertCell();
+                    info.output.forEach((line, i) => {
+                        if (i > 0) outputCell.appendChild(document.createElement('br'));
+                        outputCell.appendChild(document.createTextNode(line));
+                    });
                 });
                 document.getElementById('processingStatus').innerText = data.complete ? 'Processing complete' : 'Processing seeds...';
             };

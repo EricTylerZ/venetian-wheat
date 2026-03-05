@@ -71,7 +71,7 @@ class Sower:
             tasks = [t.strip() for t in raw_response["choices"][0]["message"]["content"].strip().split("\n") if t.strip()]
             return tasks
         except requests.RequestException as e:
-            error_msg = f"API error: {str(e)} - Key: {self.api_key[:4]}..."
+            error_msg = f"API error: {str(e)}"
             print(f"Sower failed: {error_msg}")
             return self._fallback_tasks()
 

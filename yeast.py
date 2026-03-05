@@ -7,6 +7,7 @@ Saves the last committed file on failure for LLM debugging.
 import os
 import sys
 import re
+import subprocess
 import shutil
 import hashlib
 from datetime import datetime
@@ -16,7 +17,7 @@ def get_file_hash(file_path):
         return hashlib.md5(f.read()).hexdigest()
 
 def revert_to_last_commit(file_path):
-    os.system(f"git checkout HEAD -- {file_path}")
+    subprocess.run(["git", "checkout", "HEAD", "--", file_path], check=True)
     print(f"Moving {file_path} to baseline from recent commit.")
 
 def apply_patch(file_path, patch_lines):
@@ -101,7 +102,7 @@ def apply_changes(patch_file):
         if not hunk_warnings:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.writelines(new_lines)
-            os.system(f"git add {file_path}")
+            subprocess.run(["git", "add", file_path], check=True)
     
     if warnings:
         os.makedirs(yeast_dir, exist_ok=True)
@@ -109,7 +110,7 @@ def apply_changes(patch_file):
             # Save the committed version, not the failed attempt
             with open(os.path.join(yeast_dir, os.path.basename(file_path)), 'w', encoding='utf-8') as f:
                 f.write(committed_files[file_path])
-            os.system(f"git checkout HEAD -- {file_path}")
+            subprocess.run(["git", "checkout", "HEAD", "--", file_path], check=True)
             print(f"Reverting {file_path} due to patch application failure.")
         with open(os.path.join(yeast_dir, "issue_log.txt"), 'w', encoding='utf-8') as f:
             f.write("Yeast auto-undo triggered due to errors:\n" + "\n".join(warnings) + "\n")
@@ -120,7 +121,7 @@ def apply_changes(patch_file):
         sys.exit(1)
     
     commit_msg = f"yeast: Applied patch from {patch_file} - {len(file_patch_lines)} files updated"
-    os.system(f'git commit -m "{commit_msg}"')
+    subprocess.run(["git", "commit", "-m", commit_msg], check=True)
     print("Changes applied and committed.")
 
 if __name__ == "__main__":
