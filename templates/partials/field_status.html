@@ -1,0 +1,31 @@
+<div id="processingStatus">
+    {% if status %}
+        {% set all_done = status.values()|selectattr('status', 'in', ['Fruitful', 'Barren'])|list|length == status|length %}
+        {% if all_done %}Processing complete{% else %}Processing seeds...{% endif %}
+    {% else %}
+        Field not yet sowed.
+    {% endif %}
+</div>
+
+<div class="card">
+    <h3>Field Status</h3>
+    <table>
+        <tr><th>Seed</th><th>Task</th><th>Status</th><th>Output</th></tr>
+        {% for seed_id, info in status.items() %}
+        <tr>
+            <td>{{ seed_id }}</td>
+            <td>{{ info.task }}</td>
+            <td>
+                {% set s = info.status|lower %}
+                <span class="status-{{ s }}">{{ info.status }}</span>
+            </td>
+            <td>{% for line in info.output %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+<div class="card">
+    <h3>Field Log</h3>
+    <pre>{{ log }}</pre>
+</div>
