@@ -3,53 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Venetian Wheat Field</title>
+    <title>{{ project_name }} — Venetian Wheat</title>
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
     <style>
         :root {
-            --wheat: #d4a843;
-            --soil: #2c1810;
-            --green: #4a7c3f;
-            --red: #8b3a3a;
-            --bg: #faf6ee;
-            --card: #fff;
-            --border: #e0d5c1;
-            --text: #2c1810;
-            --muted: #7a6e5d;
+            --wheat: #d4a843; --soil: #2c1810; --green: #4a7c3f;
+            --red: #8b3a3a; --bg: #faf6ee; --card: #fff;
+            --border: #e0d5c1; --text: #2c1810; --muted: #7a6e5d;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            line-height: 1.5;
-            padding: 1.5rem;
-            max-width: 1100px;
-            margin: 0 auto;
+            background: var(--bg); color: var(--text);
+            line-height: 1.5; padding: 1.5rem;
+            max-width: 1100px; margin: 0 auto;
         }
+        a { color: var(--wheat); }
         h2 { color: var(--soil); margin-bottom: 1rem; font-size: 1.6rem; }
         h3 { color: var(--soil); margin: 1.5rem 0 0.5rem; font-size: 1.1rem; }
 
         .card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem 1.25rem;
-            margin-bottom: 1rem;
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem;
         }
-
         .controls { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
         .btn {
-            display: inline-block;
-            padding: 0.4rem 1rem;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            background: var(--card);
-            color: var(--text);
-            cursor: pointer;
-            font-size: 0.85rem;
-            transition: background 0.15s;
+            display: inline-block; padding: 0.4rem 1rem;
+            border: 1px solid var(--border); border-radius: 6px;
+            background: var(--card); color: var(--text);
+            cursor: pointer; font-size: 0.85rem; transition: background 0.15s;
+            text-decoration: none;
         }
         .btn:hover { background: #f0ebe0; }
         .btn-primary { background: var(--wheat); color: var(--soil); border-color: var(--wheat); font-weight: 600; }
@@ -58,45 +42,29 @@
         .btn-danger:hover { background: #fdf0f0; }
 
         textarea {
-            width: 100%;
-            padding: 0.6rem;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            font-family: inherit;
-            font-size: 0.9rem;
-            resize: vertical;
-            margin-bottom: 0.5rem;
+            width: 100%; padding: 0.6rem;
+            border: 1px solid var(--border); border-radius: 6px;
+            font-family: inherit; font-size: 0.9rem;
+            resize: vertical; margin-bottom: 0.5rem;
         }
         textarea:focus { outline: 2px solid var(--wheat); border-color: transparent; }
 
         pre {
-            background: var(--soil);
-            color: #e8dcc8;
-            padding: 0.75rem 1rem;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            overflow-x: auto;
-            white-space: pre-wrap;
-            word-break: break-word;
-            max-height: 300px;
-            overflow-y: auto;
+            background: var(--soil); color: #e8dcc8;
+            padding: 0.75rem 1rem; border-radius: 6px;
+            font-size: 0.8rem; overflow-x: auto;
+            white-space: pre-wrap; word-break: break-word;
+            max-height: 300px; overflow-y: auto;
         }
-
         table { width: 100%; border-collapse: collapse; }
         th {
-            background: var(--soil);
-            color: var(--wheat);
-            padding: 0.5rem 0.75rem;
-            text-align: left;
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            background: var(--soil); color: var(--wheat);
+            padding: 0.5rem 0.75rem; text-align: left;
+            font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;
         }
         td {
-            padding: 0.5rem 0.75rem;
-            border-bottom: 1px solid var(--border);
-            font-size: 0.85rem;
-            vertical-align: top;
+            padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border);
+            font-size: 0.85rem; vertical-align: top;
         }
         tr:last-child td { border-bottom: none; }
 
@@ -105,51 +73,54 @@
         .status-growing { color: var(--wheat); font-weight: 600; }
         .status-repairing { color: #b8860b; font-weight: 600; }
 
-        #processingStatus {
-            font-size: 0.85rem;
-            color: var(--muted);
-            margin-bottom: 0.5rem;
-        }
+        #processingStatus { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.5rem; }
 
-        .provider-badge {
-            display: inline-block;
-            padding: 0.15rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
+        .badge {
+            display: inline-block; padding: 0.15rem 0.5rem;
+            border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
         }
-        .provider-venice { background: #e8f4e8; color: #2d6a2d; }
-        .provider-grok { background: #e8e8f4; color: #2d2d6a; }
-        .provider-claude_code { background: #f4e8e0; color: #6a3d2d; }
+        .badge-venice { background: #e8f4e8; color: #2d6a2d; }
+        .badge-grok { background: #e8e8f4; color: #2d2d6a; }
+        .badge-claude_code { background: #f4e8e0; color: #6a3d2d; }
+
+        .model-info { font-size: 0.8rem; color: var(--muted); margin-bottom: 1rem; }
     </style>
 </head>
 <body>
-    <h2>Venetian Wheat Field
-        <span class="provider-badge provider-{{ config.llm_api }}">{{ config.llm_api }}</span>
+    <p><a href="/">&larr; Dashboard</a></p>
+    <h2>{{ project_name }}
+        <span class="badge badge-{{ config.llm_api }}">{{ config.llm_api }}</span>
+        {% if active %}<span class="badge" style="background:#e8f4e8;color:#2d6a2d;">tending</span>{% endif %}
     </h2>
+    {% if config.models %}
+    <div class="model-info">
+        Strategist: <strong>{{ config.models.get("strategist", "default") }}</strong> /
+        Coder: <strong>{{ config.models.get("coder", "default") }}</strong> /
+        Rescuer: <strong>{{ config.models.get("rescuer", "default") }}</strong>
+    </div>
+    {% endif %}
 
     <div class="card">
         <form id="sowForm" onsubmit="sowSeeds(event)">
             <textarea name="guidance" rows="3"
-                placeholder="Sow guidance (e.g., 'Improve seed logging') — leave blank for AI to propose"></textarea>
+                placeholder="Sow guidance for this client — leave blank for AI to propose"></textarea>
             <div class="controls">
                 <button type="submit" class="btn btn-primary">Sow Seeds</button>
-                <button type="button" class="btn" onclick="fetch('/pause')">Pause</button>
-                <button type="button" class="btn" onclick="fetch('/resume')">Resume</button>
+                <button type="button" class="btn" onclick="fetch('/projects/{{ project_id }}/pause')">Pause</button>
+                <button type="button" class="btn" onclick="fetch('/projects/{{ project_id }}/resume')">Resume</button>
                 <button type="button" class="btn" onclick="showSuccess()">Successful Seeds</button>
                 <button type="button" class="btn" onclick="integrateSeeds()">Integrate Seeds</button>
-                <button type="button" class="btn btn-danger" onclick="if(confirm('Clear all experiments?')) fetch('/clear')">Clear</button>
+                <button type="button" class="btn btn-danger" onclick="if(confirm('Clear all experiments?')) fetch('/projects/{{ project_id }}/clear')">Clear</button>
             </div>
         </form>
     </div>
 
-    <div hx-ext="sse" sse-connect="/stream" sse-swap="message" hx-swap="innerHTML">
+    <div hx-ext="sse" sse-connect="/projects/{{ project_id }}/stream" sse-swap="message" hx-swap="innerHTML">
         {% include 'partials/field_status.html' %}
     </div>
 
     <details class="card">
-        <summary><h3 style="display:inline">Config</h3></summary>
+        <summary><h3 style="display:inline">Project Config</h3></summary>
         <form id="configForm" onsubmit="updateConfig(event)">
             <textarea name="config" rows="10">{{ config_json }}</textarea>
             <button type="submit" class="btn">Update Config</button>
@@ -157,30 +128,34 @@
     </details>
 
     <script>
+        const PID = '{{ project_id }}';
         function sowSeeds(event) {
             event.preventDefault();
             const guidance = event.target.querySelector('textarea').value.trim();
-            fetch('/sow', {
+            fetch(`/projects/${PID}/sow`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({guidance: guidance || null})
             }).then(r => r.json()).then(d => alert(d.message));
         }
         function showSuccess() {
-            fetch('/success').then(r => r.json()).then(d => alert(d.successful_seeds));
+            fetch(`/projects/${PID}/success`).then(r => r.json()).then(d => alert(d.successful_seeds));
         }
         function integrateSeeds() {
-            fetch('/integrate', {method: 'POST', headers: {'Content-Type': 'application/json'}})
+            fetch(`/projects/${PID}/integrate`, {method: 'POST', headers: {'Content-Type': 'application/json'}})
                 .then(r => r.json()).then(d => alert(d.message));
         }
         function updateConfig(event) {
             event.preventDefault();
             const config = event.target.querySelector('textarea').value;
-            fetch('/update_config', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: config
-            }).then(r => r.json()).then(d => alert(d.message));
+            try {
+                const parsed = JSON.parse(config);
+                fetch(`/projects/${PID}/config`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: config
+                }).then(r => r.json()).then(d => alert(d.message));
+            } catch(e) { alert('Invalid JSON: ' + e.message); }
         }
     </script>
 </body>

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Project — Venetian Wheat</title>
+    <style>
+        :root {
+            --wheat: #d4a843; --soil: #2c1810; --green: #4a7c3f;
+            --bg: #faf6ee; --card: #fff; --border: #e0d5c1;
+            --text: #2c1810; --muted: #7a6e5d;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg); color: var(--text);
+            line-height: 1.5; padding: 1.5rem;
+            max-width: 700px; margin: 0 auto;
+        }
+        h1 { color: var(--soil); margin-bottom: 1.5rem; }
+        a { color: var(--wheat); }
+
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 0.25rem; color: var(--soil); }
+        .hint { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; }
+
+        input, select, textarea {
+            width: 100%; padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border); border-radius: 6px;
+            font-family: inherit; font-size: 0.9rem;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: 2px solid var(--wheat); border-color: transparent;
+        }
+
+        .model-row {
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem;
+        }
+
+        .card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem;
+        }
+        .card h3 { margin-bottom: 0.75rem; font-size: 1rem; }
+
+        .btn {
+            display: inline-block; padding: 0.5rem 1.5rem;
+            border: 1px solid var(--border); border-radius: 6px;
+            background: var(--card); color: var(--text);
+            cursor: pointer; font-size: 0.9rem; text-decoration: none;
+        }
+        .btn-primary { background: var(--wheat); color: var(--soil); border-color: var(--wheat); font-weight: 600; }
+        .btn-primary:hover { background: #c99a35; }
+
+        #claudeModels, #apiModels { display: none; }
+    </style>
+</head>
+<body>
+    <p><a href="/">&larr; Dashboard</a></p>
+    <h1>New Project</h1>
+
+    <form id="projectForm" onsubmit="createProject(event)">
+        <div class="card">
+            <h3>Basics</h3>
+            <div class="form-group">
+                <label>Project Name</label>
+                <input type="text" name="name" required placeholder="e.g., Acme Corp Dashboard">
+            </div>
+            <div class="form-group">
+                <label>Project ID</label>
+                <div class="hint">Lowercase, no spaces — used in URLs and file paths</div>
+                <input type="text" name="project_id" required placeholder="e.g., acme_dashboard" pattern="[a-z0-9_]+">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" rows="2" placeholder="What is this project about?"></textarea>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Provider & Models</h3>
+            <div class="form-group">
+                <label>LLM Provider</label>
+                <select name="llm_api" onchange="toggleModels(this.value)">
+                    <option value="claude_code">Claude Code (Pro Max — no API fees)</option>
+                    <option value="venice">Venice AI</option>
+                    <option value="grok">Grok</option>
+                </select>
+            </div>
+
+            <div id="claudeModels">
+                <div class="hint">Model tiers — use the right model for each job</div>
+                <div class="model-row">
+                    <div class="form-group">
+                        <label>Strategist</label>
+                        <select name="model_strategist_claude">
+                            <option value="opus">Opus (deep reasoning)</option>
+                            <option value="sonnet" selected>Sonnet (balanced)</option>
+                            <option value="haiku">Haiku (fast)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Coder</label>
+                        <select name="model_coder_claude">
+                            <option value="opus">Opus</option>
+                            <option value="sonnet" selected>Sonnet</option>
+                            <option value="haiku">Haiku</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Rescuer</label>
+                        <select name="model_rescuer_claude">
+                            <option value="opus">Opus</option>
+                            <option value="sonnet">Sonnet</option>
+                            <option value="haiku" selected>Haiku (fast fixes)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div id="apiModels">
+                <div class="hint">Enter model IDs from your provider</div>
+                <div class="model-row">
+                    <div class="form-group">
+                        <label>Strategist</label>
+                        <input type="text" name="model_strategist_api" placeholder="e.g., mistral-31-24b">
+                    </div>
+                    <div class="form-group">
+                        <label>Coder</label>
+                        <input type="text" name="model_coder_api" placeholder="e.g., mistral-31-24b">
+                    </div>
+                    <div class="form-group">
+                        <label>Rescuer</label>
+                        <input type="text" name="model_rescuer_api" placeholder="e.g., mistral-31-24b">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Seeds per run</label>
+                <input type="number" name="seeds_per_run" value="3" min="1" max="10">
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Prompts (Optional)</h3>
+            <div class="hint">Leave blank to use the base defaults from config.json. These are unique per client.</div>
+            <div class="form-group">
+                <label>Strategist Prompt</label>
+                <textarea name="strategist_prompt" rows="4" placeholder="Custom strategist prompt for this client..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Coder Prompt</label>
+                <textarea name="coder_prompt" rows="4" placeholder="Custom coder prompt for this client..."></textarea>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Create Project</button>
+        <a href="/" class="btn">Cancel</a>
+    </form>
+
+    <script>
+        function toggleModels(provider) {
+            document.getElementById('claudeModels').style.display = provider === 'claude_code' ? 'block' : 'none';
+            document.getElementById('apiModels').style.display = provider !== 'claude_code' ? 'block' : 'none';
+        }
+        toggleModels('claude_code');
+
+        function createProject(e) {
+            e.preventDefault();
+            const form = e.target;
+            const provider = form.llm_api.value;
+            const isClaude = provider === 'claude_code';
+
+            const data = {
+                project_id: form.project_id.value,
+                name: form.name.value,
+                description: form.description.value,
+                llm_api: provider,
+                model_strategist: isClaude ? form.model_strategist_claude.value : form.model_strategist_api.value,
+                model_coder: isClaude ? form.model_coder_claude.value : form.model_coder_api.value,
+                model_rescuer: isClaude ? form.model_rescuer_claude.value : form.model_rescuer_api.value,
+                seeds_per_run: form.seeds_per_run.value,
+                strategist_prompt: form.strategist_prompt.value,
+                coder_prompt: form.coder_prompt.value,
+            };
+
+            fetch('/projects/new', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            }).then(r => r.json()).then(d => {
+                if (d.redirect) window.location.href = d.redirect;
+                else alert(d.message);
+            });
+        }
+    </script>
+</body>
+</html>

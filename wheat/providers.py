@@ -24,7 +24,7 @@ class APIProvider:
         self.api_key = api_key
         self.timeout = timeout
 
-    def generate(self, prompt, model, max_tokens, retries=3):
+    def generate(self, prompt, model, max_tokens=4096, retries=3, sunshine_dir=None):
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -34,6 +34,14 @@ class APIProvider:
             "messages": [{"role": "system", "content": prompt}],
             "max_tokens": max_tokens,
         }
+
+        # Log request if sunshine_dir provided
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        if sunshine_dir:
+            os.makedirs(sunshine_dir, exist_ok=True)
+            with open(os.path.join(sunshine_dir, f"{timestamp}_request.json"), "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
+
         last_error = None
         for attempt in range(retries):
             try:
@@ -42,6 +50,12 @@ class APIProvider:
                 )
                 response.raise_for_status()
                 data = response.json()
+
+                # Log response
+                if sunshine_dir:
+                    with open(os.path.join(sunshine_dir, f"{timestamp}_response.json"), "w", encoding="utf-8") as f:
+                        json.dump(data, f, indent=2)
+
                 text = data["choices"][0]["message"]["content"].strip()
                 usage = data.get("usage", {})
                 return text, {
@@ -50,6 +64,9 @@ class APIProvider:
                 }
             except requests.RequestException as e:
                 last_error = e
+                if sunshine_dir:
+                    with open(os.path.join(sunshine_dir, f"{timestamp}_error_{attempt}.json"), "w", encoding="utf-8") as f:
+                        json.dump({"error": str(e)[:500]}, f, indent=2)
                 if attempt < retries - 1:
                     time.sleep(2 ** attempt + random.uniform(0, 1))
         raise last_error
@@ -72,13 +89,19 @@ class ClaudeCodeProvider:
         self.timeout = timeout
         self.model = model  # e.g. "opus", "sonnet" — None uses CLI default
 
-    def generate(self, prompt, model=None, max_tokens=None, retries=2):
+    def generate(self, prompt, model=None, max_tokens=None, retries=2, sunshine_dir=None):
         model = model or self.model
         last_error = None
 
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        if sunshine_dir:
+            os.makedirs(sunshine_dir, exist_ok=True)
+            with open(os.path.join(sunshine_dir, f"{timestamp}_claude_request.json"), "w", encoding="utf-8") as f:
+                json.dump({"model": model, "prompt_length": len(prompt), "prompt_preview": prompt[:500]}, f, indent=2)
+
         for attempt in range(retries):
+            prompt_file = None
             try:
-                # Write prompt to a temp file to avoid shell escaping issues
                 with tempfile.NamedTemporaryFile(
                     mode="w", suffix=".txt", delete=False, encoding="utf-8"
                 ) as f:
@@ -88,7 +111,6 @@ class ClaudeCodeProvider:
                 cmd = ["claude", "-p"]
                 if model:
                     cmd.extend(["--model", model])
-                # Pipe the prompt via stdin from the file
                 with open(prompt_file, "r", encoding="utf-8") as pf:
                     result = subprocess.run(
                         cmd,
@@ -98,16 +120,17 @@ class ClaudeCodeProvider:
                         timeout=self.timeout,
                     )
 
-                os.unlink(prompt_file)
-
                 if result.returncode != 0:
                     raise RuntimeError(
                         f"claude CLI exited {result.returncode}: {result.stderr[:200]}"
                     )
 
                 text = result.stdout.strip()
-                # Claude Code CLI doesn't report token counts,
-                # so we estimate for tracking consistency
+
+                if sunshine_dir:
+                    with open(os.path.join(sunshine_dir, f"{timestamp}_claude_response.json"), "w", encoding="utf-8") as f:
+                        json.dump({"model": model, "response_length": len(text), "response_preview": text[:500]}, f, indent=2)
+
                 return text, {
                     "prompt_tokens": len(prompt) // 4,
                     "completion_tokens": len(text) // 4,
@@ -115,10 +138,13 @@ class ClaudeCodeProvider:
 
             except (subprocess.TimeoutExpired, RuntimeError, FileNotFoundError) as e:
                 last_error = e
+                if sunshine_dir:
+                    with open(os.path.join(sunshine_dir, f"{timestamp}_claude_error_{attempt}.json"), "w", encoding="utf-8") as f:
+                        json.dump({"error": str(e)[:500]}, f, indent=2)
                 if attempt < retries - 1:
                     time.sleep(2 ** attempt + random.uniform(0, 1))
             finally:
-                if "prompt_file" in locals() and os.path.exists(prompt_file):
+                if prompt_file and os.path.exists(prompt_file):
                     os.unlink(prompt_file)
 
         raise last_error
@@ -128,22 +154,16 @@ def get_provider(config):
     """
     Factory: returns the right provider based on config["llm_api"].
 
-    config.json examples:
-
-      Venice (default):
-        "llm_api": "venice"
-
-      Claude Code CLI (Pro Max, no API fees):
-        "llm_api": "claude_code"
-        "claude_code_model": "sonnet"  (optional, defaults to CLI default)
-        "claude_code_timeout": 300     (optional)
+    Supports:
+      "venice" / "grok" — OpenAI-compatible API (needs API key)
+      "claude_code"     — Claude Code CLI (Pro Max, no API fees)
     """
     api_type = config.get("llm_api", "venice")
 
     if api_type == "claude_code":
         return ClaudeCodeProvider(
             timeout=config.get("claude_code_timeout", 300),
-            model=config.get("claude_code_model"),
+            model=config.get("models", {}).get("coder"),
         )
 
     # Venice, Grok, or any OpenAI-compatible API
