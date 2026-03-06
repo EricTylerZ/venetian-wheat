@@ -4,6 +4,8 @@
   "venice_models_url": "https://api.venice.ai/api/v1/models",
   "grok_api_url": "https://api.xai.com/grok/v1/chat",
   "grok_models_url": "https://api.xai.com/grok/v1/models",
+  "claude_code_model": null,
+  "claude_code_timeout": 300,
   "max_tokens": 12000,
   "timeout": 150,
   "default_coder_model": "mistral-31-24b",
