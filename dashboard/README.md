@@ -20,8 +20,10 @@ Vercel-deployed web dashboard for [venetian-wheat](https://github.com/EricTylerZ
 | `GITHUB_TOKEN` | Fine-grained PAT with `Contents` read/write on `venetian-wheat` |
 | `GITHUB_OWNER` | `EricTylerZ` |
 | `GITHUB_REPO` | `venetian-wheat` |
+| `DASHBOARD_PASSWORD` | A password only you know — required to access the dashboard |
 
 4. Deploy. Access from your phone at your Vercel URL.
+5. Enter your password once — you'll get a cookie that lasts 30 days.
 
 ## Create a GitHub Token
 
