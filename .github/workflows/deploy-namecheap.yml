@@ -1,0 +1,53 @@
+name: Deploy to Namecheap
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'server/**'
+      - '.github/workflows/deploy-namecheap.yml'
+  workflow_dispatch:  # allow manual trigger from GitHub UI
+
+jobs:
+  deploy:
+    name: Deploy server scripts to Namecheap
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH (rsync)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.NAMECHEAP_HOST }}
+          username: ${{ secrets.NAMECHEAP_USER }}
+          password: ${{ secrets.NAMECHEAP_SSH_PASS }}
+          port: 21098  # Namecheap shared hosting SSH port (common: 21098 or 22)
+          script: |
+            mkdir -p ~/public_html/wheat-api
+            echo "SSH connection working"
+
+      - name: Upload server files via rsync over SSH
+        uses: burnett01/rsync-deployments@7.0.1
+        with:
+          switches: -avzr --delete --exclude='.env' --exclude='*.log'
+          path: server/
+          remote_path: ~/public_html/wheat-api/
+          remote_host: ${{ secrets.NAMECHEAP_HOST }}
+          remote_port: 21098
+          remote_user: ${{ secrets.NAMECHEAP_USER }}
+          remote_password: ${{ secrets.NAMECHEAP_SSH_PASS }}
+
+      - name: Run post-deploy setup on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.NAMECHEAP_HOST }}
+          username: ${{ secrets.NAMECHEAP_USER }}
+          password: ${{ secrets.NAMECHEAP_SSH_PASS }}
+          port: 21098
+          script: |
+            cd ~/public_html/wheat-api
+            # Protect the api directory from direct browsing
+            echo "Options -Indexes" > .htaccess
+            echo "Deployed successfully: $(date)"

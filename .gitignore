@@ -46,3 +46,6 @@ wheat/__pycache__/
 .vscode/
 .idea/
 .idea/.env
+
+# Server config — contains DB credentials, NEVER commit this
+server/config.php

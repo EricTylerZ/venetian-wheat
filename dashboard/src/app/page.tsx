@@ -67,9 +67,14 @@ export default function Dashboard() {
 
   return (
     <>
-      <h1 style={{ color: "#2c1810", marginBottom: 4, fontSize: "1.5rem" }}>
-        Venetian Wheat
-      </h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+        <h1 style={{ color: "#2c1810", fontSize: "1.5rem", margin: 0 }}>
+          Venetian Wheat
+        </h1>
+        <Link href="/server" style={{ fontSize: "0.85rem", color: "#7a6e5d", textDecoration: "none" }}>
+          Server →
+        </Link>
+      </div>
       <p style={{ color: "#7a6e5d", marginBottom: "1.5rem", fontSize: "0.9rem" }}>
         Client fields &mdash; tap a project to see details
       </p>

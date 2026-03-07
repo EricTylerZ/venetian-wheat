@@ -1,0 +1,35 @@
+# Venetian Wheat API — Apache config
+# Place this in your wheat-api/ directory on Namecheap
+
+# Block directory listing
+Options -Indexes
+
+# Block direct access to config file
+<Files "config.php">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+# Block access to .htaccess itself
+<Files ".htaccess">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+# Only allow PHP files and nothing else
+<FilesMatch "^(?!.*\.php$).*$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# CORS headers — allow your Vercel dashboard to call this API
+<IfModule mod_headers.c>
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, X-Wheat-Key"
+</IfModule>
+
+# Handle OPTIONS preflight quickly
+RewriteEngine On
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule .* - [R=204,L]
