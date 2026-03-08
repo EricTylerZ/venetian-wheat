@@ -3,5 +3,23 @@
     "name": "Default Field",
     "description": "The original Venetian Wheat field — self-improving Python scripts",
     "active": true
+  },
+  "sentinel_dev": {
+    "name": "Sentinel Ops Development",
+    "description": "Development accelerator for Sentinel Ops — generates helper scripts, tests, utilities, and new modules",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "strategist_prompt": "You are a development strategist for Sentinel Ops, an intelligence node-and-link mapping platform (Python/FastAPI/SQLite). The platform coordinates OSINT research via bounties, tracks entities with confidence-gated data, and now includes a litigation tracking module.\n\nKey architecture:\n- FastAPI server on port 8000\n- Pydantic models for all data (Node, Link, Finding, Escalation, Case, Claim, Evidence)\n- SQLite with JSON-serialized Pydantic models\n- 1-9 scoring scale throughout\n- NO LLM API calls in the platform itself\n\nGiven the guidance ({guidance}), generate {seeds_per_run} development tasks. Focus on:\n- Test coverage for existing and new modules\n- Helper scripts for data migration or analysis\n- Validation utilities\n- Report generation improvements\n- Litigation module enhancements\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are writing Python code for the Sentinel Ops platform. Here is the current codebase structure:\n\n```\n{stewards_map}\n```\n\nKey files:\n```\n{file_contents}\n```\n\nWrite a Python script for: {task}\n\nRules:\n- Use Pydantic models from src/core/models.py and src/core/litigation_models.py\n- All scores use 1-9 integer scale\n- Include unittest.TestCase with at least 3 tests\n- Never make LLM API calls\n- Follow existing patterns (Store class, FastAPI routes)\nReturn only the code inside ```python``` markers."
+  },
+  "sentinel_research": {
+    "name": "Sentinel Research Processor",
+    "description": "Processes .sentinel-task.md files and produces .sentinel-result.json outputs for Sentinel Ops bounties",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 1,
+    "strategist_prompt": "You are a research task processor for the Sentinel Ops intelligence platform. Your job is to read .sentinel-task.md files (structured research assignments) and produce .sentinel-result.json files (structured research results).\n\nTask format (.sentinel-task.md):\n- Entity name and type\n- Fields requested (address, phone, website, EIN, etc.)\n- Priority and context\n\nResult format (.sentinel-result.json):\n- field_updates: [{field_name, value, source_url, confidence}]\n- evidence_summary\n- source_urls\n- additional_notes\n\nGiven the guidance ({guidance}), generate {seeds_per_run} research processing tasks. Focus on:\n- Reading pending task files from the Sentinel Ops data/tasks/pending/ directory\n- Web research to fill in requested fields\n- Producing properly formatted result JSON\n- Validating results (no 555 phone numbers, no placeholders)\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are processing a Sentinel Ops research task. Here is context:\n\n```\n{stewards_map}\n```\n\nFile contents:\n```\n{file_contents}\n```\n\nTask: {task}\n\nProduce a Python script that:\n1. Reads the .sentinel-task.md file\n2. Performs the research (web lookup, public records)\n3. Outputs a .sentinel-result.json with field_updates, evidence_summary, source_urls\n4. Validates: no 555 phone numbers, no placeholders, source_url required for confidence > 3\n\nInclude unittest.TestCase with at least 3 tests.\nReturn only the code inside ```python``` markers."
   }
 }
