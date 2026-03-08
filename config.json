@@ -8,12 +8,12 @@
   "max_tokens": 12000,
   "timeout": 150,
   "models": {
-    "strategist": "sonnet",
+    "strategist": "opus",
     "coder": "sonnet",
     "rescuer": "sonnet"
   },
   "default_coder_model": "sonnet",
-  "default_strategist_model": "sonnet",
+  "default_strategist_model": "opus",
   "lifespan": 420,
   "token_period": "daily",
   "seeds_per_run": 3,
