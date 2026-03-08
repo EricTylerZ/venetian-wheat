@@ -113,13 +113,15 @@
             {% if p.description %}
             <div class="project-desc">{{ p.description }}</div>
             {% endif %}
-            {% if p.models %}
             <div class="model-tier">
+                {% if p.provider == 'claude_code' %}
+                Claude Code{% if p.models.get("strategist") %} — S: {{ p.models.strategist }}{% endif %}
+                {% elif p.models %}
                 {% if p.models.get("strategist") %}S: {{ p.models.strategist }}{% endif %}
                 {% if p.models.get("coder") %} / C: {{ p.models.coder }}{% endif %}
                 {% if p.models.get("rescuer") %} / R: {{ p.models.rescuer }}{% endif %}
+                {% endif %}
             </div>
-            {% endif %}
             <div class="seed-stats">
                 {% if p.total_seeds > 0 %}
                 <span class="stat-fruitful">{{ p.fruitful }} fruitful</span>

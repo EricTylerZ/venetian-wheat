@@ -180,7 +180,11 @@ def dashboard():
         # Determine provider from project config
         pconfig = load_project_config(pid)
         provider = pconfig.get("llm_api", "venice")
-        models = pconfig.get("models", {})
+        # For claude_code, only show project-specific model overrides (not inherited defaults)
+        if provider == "claude_code":
+            models = pdata.get("models", {})
+        else:
+            models = pconfig.get("models", {})
 
         project_list.append({
             "id": pid,
