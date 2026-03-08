@@ -3,138 +3,470 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Venetian Wheat — Dashboard</title>
+    <title>Venetian Wheat — Automotive Accountability</title>
     <style>
         :root {
             --wheat: #d4a843; --soil: #2c1810; --green: #4a7c3f;
             --red: #8b3a3a; --bg: #faf6ee; --card: #fff;
             --border: #e0d5c1; --text: #2c1810; --muted: #7a6e5d;
+            --blue: #3a5f8b;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
             background: var(--bg); color: var(--text);
             line-height: 1.5; padding: 1.5rem;
-            max-width: 1100px; margin: 0 auto;
+            max-width: 1200px; margin: 0 auto;
         }
-        h1 { color: var(--soil); margin-bottom: 0.25rem; }
-        .subtitle { color: var(--muted); margin-bottom: 1.5rem; font-size: 0.9rem; }
+        h1 { color: var(--soil); margin-bottom: 0.15rem; }
+        h2 { color: var(--soil); margin: 1.5rem 0 0.75rem; font-size: 1.2rem; }
+        .subtitle { color: var(--muted); margin-bottom: 1rem; font-size: 0.9rem; }
 
-        .projects-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
+        /* Command Center */
+        .command-center {
+            background: var(--soil); color: #e8dcc8; border-radius: 10px;
+            padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;
+            display: flex; justify-content: space-between; align-items: center;
+            flex-wrap: wrap; gap: 1rem;
         }
-        .project-card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1.25rem;
-            text-decoration: none;
-            color: inherit;
-            transition: box-shadow 0.15s, border-color 0.15s;
+        .command-center .stats {
+            display: flex; gap: 1.5rem; font-size: 0.85rem;
+        }
+        .command-center .stat-num {
+            font-size: 1.5rem; font-weight: 700; color: var(--wheat);
             display: block;
         }
-        .project-card:hover {
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            border-color: var(--wheat);
-        }
-        .project-card.active { border-left: 4px solid var(--green); }
+        .command-center .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
-        .project-header {
-            display: flex; justify-content: space-between;
-            align-items: center; margin-bottom: 0.5rem;
-        }
-        .project-name { font-size: 1.15rem; font-weight: 600; color: var(--soil); }
-        .project-desc { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.75rem; }
-
-        .badge {
-            display: inline-block; padding: 0.15rem 0.5rem;
-            border-radius: 4px; font-size: 0.7rem;
-            font-weight: 600; text-transform: uppercase;
-        }
-        .badge-venice { background: #e8f4e8; color: #2d6a2d; }
-        .badge-grok { background: #e8e8f4; color: #2d2d6a; }
-        .badge-claude_code { background: #f4e8e0; color: #6a3d2d; }
-        .badge-active { background: #e8f4e8; color: #2d6a2d; }
-        .badge-idle { background: #f0ebe0; color: var(--muted); }
-
-        .seed-stats {
-            display: flex; gap: 1rem; font-size: 0.8rem;
-            color: var(--muted); margin-top: 0.5rem;
-        }
-        .stat-fruitful { color: var(--green); font-weight: 600; }
-        .stat-barren { color: var(--red); font-weight: 600; }
-        .stat-growing { color: var(--wheat); font-weight: 600; }
-
-        .model-tier {
-            font-size: 0.75rem; color: var(--muted);
-            margin-top: 0.25rem;
-        }
-
+        /* Buttons */
         .btn {
-            display: inline-block; padding: 0.5rem 1.25rem;
+            display: inline-block; padding: 0.45rem 1rem;
             border: 1px solid var(--border); border-radius: 6px;
             background: var(--card); color: var(--text);
-            cursor: pointer; font-size: 0.9rem; text-decoration: none;
+            cursor: pointer; font-size: 0.85rem; text-decoration: none;
             transition: background 0.15s;
         }
         .btn:hover { background: #f0ebe0; }
         .btn-primary { background: var(--wheat); color: var(--soil); border-color: var(--wheat); font-weight: 600; }
         .btn-primary:hover { background: #c99a35; }
+        .btn-scan { background: var(--blue); color: #fff; border-color: var(--blue); }
+        .btn-scan:hover { background: #2d4f75; }
+        .btn-sm { padding: 0.3rem 0.75rem; font-size: 0.8rem; }
+        .btn-danger { color: var(--red); border-color: var(--red); }
 
-        .new-card {
-            border: 2px dashed var(--border);
-            display: flex; align-items: center; justify-content: center;
-            min-height: 160px; font-size: 1.1rem; color: var(--muted);
+        /* Tabs */
+        .tabs { display: flex; gap: 0; margin-bottom: 0; border-bottom: 2px solid var(--border); }
+        .tab {
+            padding: 0.6rem 1.25rem; cursor: pointer; font-size: 0.9rem;
+            border-bottom: 2px solid transparent; margin-bottom: -2px;
+            color: var(--muted); font-weight: 500;
         }
-        .new-card:hover { border-color: var(--wheat); color: var(--wheat); }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--soil); border-bottom-color: var(--wheat); font-weight: 600; }
+        .tab-panel { display: none; padding-top: 1rem; }
+        .tab-panel.active { display: block; }
+
+        /* Cards */
+        .card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem;
+        }
+
+        /* Field Grid */
+        .fields-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 0.75rem;
+        }
+        .field-card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1rem 1.15rem;
+            text-decoration: none; color: inherit;
+            transition: box-shadow 0.15s, border-color 0.15s;
+            display: block; position: relative;
+        }
+        .field-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-color: var(--wheat); }
+        .field-card.active { border-left: 4px solid var(--green); }
+        .field-name { font-size: 1rem; font-weight: 600; color: var(--soil); margin-bottom: 0.25rem; }
+        .field-desc { color: var(--muted); font-size: 0.8rem; margin-bottom: 0.5rem;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .field-meta { display: flex; gap: 0.75rem; font-size: 0.75rem; color: var(--muted); }
+        .field-channels { font-size: 0.75rem; color: var(--blue); }
+
+        .badge {
+            display: inline-block; padding: 0.1rem 0.4rem;
+            border-radius: 3px; font-size: 0.65rem;
+            font-weight: 600; text-transform: uppercase;
+        }
+        .badge-active { background: #e8f4e8; color: #2d6a2d; }
+        .badge-idle { background: #f0ebe0; color: var(--muted); }
+
+        .stat-fruitful { color: var(--green); font-weight: 600; }
+        .stat-barren { color: var(--red); font-weight: 600; }
+        .stat-growing { color: var(--wheat); font-weight: 600; }
+
+        /* Channel list */
+        .channel-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0.6rem 0; border-bottom: 1px solid var(--border);
+        }
+        .channel-row:last-child { border-bottom: none; }
+        .channel-name { font-weight: 600; font-size: 0.9rem; }
+        .channel-type {
+            display: inline-block; padding: 0.1rem 0.4rem;
+            border-radius: 3px; font-size: 0.65rem; font-weight: 600;
+            text-transform: uppercase; background: #e8e8f4; color: #2d2d6a;
+        }
+        .channel-feeds { font-size: 0.75rem; color: var(--muted); }
+
+        /* Cases table */
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            background: var(--soil); color: var(--wheat);
+            padding: 0.5rem 0.75rem; text-align: left;
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        td {
+            padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border);
+            font-size: 0.82rem; vertical-align: top;
+        }
+        tr:last-child td { border-bottom: none; }
+
+        .stage-badge {
+            display: inline-block; padding: 0.15rem 0.5rem;
+            border-radius: 10px; font-size: 0.7rem; font-weight: 600;
+        }
+        .stage-seed { background: #f0ebe0; color: var(--muted); }
+        .stage-sprout { background: #e8f4e8; color: var(--green); }
+        .stage-notice { background: #e8e8f4; color: var(--blue); }
+        .stage-virtue { background: #f4e8f4; color: #6a2d6a; }
+        .stage-community { background: #e8f4f4; color: #2d6a6a; }
+        .stage-demand { background: #f4e8e0; color: #6a3d2d; }
+        .stage-civil { background: #f4e0e0; color: var(--red); }
+        .stage-harvest { background: #d4e8d4; color: #1a5a1a; }
+
+        .severity-1, .severity-2 { color: var(--muted); }
+        .severity-3 { color: var(--wheat); }
+        .severity-4 { color: #b8860b; font-weight: 600; }
+        .severity-5 { color: var(--red); font-weight: 700; }
+
+        /* Briefing */
+        pre {
+            background: var(--soil); color: #e8dcc8;
+            padding: 1rem; border-radius: 6px;
+            font-size: 0.8rem; overflow-x: auto;
+            white-space: pre-wrap; word-break: break-word;
+            max-height: 500px; overflow-y: auto;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed; bottom: 1.5rem; right: 1.5rem;
+            background: var(--soil); color: #e8dcc8; padding: 0.75rem 1.25rem;
+            border-radius: 8px; font-size: 0.85rem; z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            transform: translateY(100px); opacity: 0;
+            transition: transform 0.3s, opacity 0.3s;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+
+        @media (max-width: 600px) {
+            .command-center { flex-direction: column; align-items: flex-start; }
+            .fields-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
     <h1>Venetian Wheat</h1>
-    <p class="subtitle">Multi-project autonomous code generation fields</p>
+    <p class="subtitle">Automotive Accountability Intelligence — Englewood, CO</p>
 
-    <div class="projects-grid">
-        {% for p in projects %}
-        <a href="/projects/{{ p.id }}" class="project-card {{ 'active' if p.active else '' }}">
-            <div class="project-header">
-                <span class="project-name">{{ p.name }}</span>
-                <span>
-                    <span class="badge badge-{{ p.provider }}">{{ p.provider }}</span>
-                    {% if p.active %}
+    <!-- Command Center -->
+    <div class="command-center">
+        <div class="stats">
+            <div>
+                <span class="stat-num">{{ fields | length }}</span>
+                fields
+            </div>
+            <div>
+                <span class="stat-num">{{ channels | length }}</span>
+                channels
+            </div>
+            <div>
+                <span class="stat-num">{{ active_cases }}</span>
+                active cases
+            </div>
+            <div>
+                <span class="stat-num">{{ escalation_ready }}</span>
+                ready to escalate
+            </div>
+        </div>
+        <div class="actions">
+            <button class="btn btn-scan" onclick="runDailyCycle()">Run Daily Cycle</button>
+            <button class="btn btn-scan" onclick="runGrokScans()">Grok Scan Only</button>
+            <button class="btn" onclick="generateBriefing()">Generate Briefing</button>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('fields')">Fields ({{ fields | length }})</div>
+        <div class="tab" onclick="switchTab('channels')">Channels ({{ channels | length }})</div>
+        <div class="tab" onclick="switchTab('cases')">Cases ({{ active_cases }})</div>
+        <div class="tab" onclick="switchTab('briefing')">Briefing</div>
+        <div class="tab" onclick="switchTab('intake')">Submit Report</div>
+    </div>
+
+    <!-- Fields Tab -->
+    <div id="tab-fields" class="tab-panel active">
+        <div class="fields-grid">
+            {% for f in fields %}
+            <a href="/projects/{{ f.id }}" class="field-card {{ 'active' if f.active else '' }}">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div class="field-name">{{ f.name }}</div>
+                    {% if f.active %}
                     <span class="badge badge-active">tending</span>
                     {% else %}
                     <span class="badge badge-idle">idle</span>
                     {% endif %}
-                </span>
-            </div>
-            {% if p.description %}
-            <div class="project-desc">{{ p.description }}</div>
-            {% endif %}
-            <div class="model-tier">
-                {% if p.provider == 'claude_code' %}
-                Claude Code{% if p.models.get("strategist") %} — S: {{ p.models.strategist }}{% endif %}
-                {% elif p.models %}
-                {% if p.models.get("strategist") %}S: {{ p.models.strategist }}{% endif %}
-                {% if p.models.get("coder") %} / C: {{ p.models.coder }}{% endif %}
-                {% if p.models.get("rescuer") %} / R: {{ p.models.rescuer }}{% endif %}
-                {% endif %}
-            </div>
-            <div class="seed-stats">
-                {% if p.total_seeds > 0 %}
-                <span class="stat-fruitful">{{ p.fruitful }} fruitful</span>
-                <span class="stat-growing">{{ p.growing }} growing</span>
-                <span class="stat-barren">{{ p.barren }} barren</span>
-                {% else %}
-                <span>No seeds yet</span>
-                {% endif %}
-            </div>
-        </a>
-        {% endfor %}
-
-        <a href="/projects/new" class="project-card new-card">+ New Project</a>
+                </div>
+                <div class="field-desc">{{ f.description }}</div>
+                <div class="field-meta">
+                    {% if f.total_seeds > 0 %}
+                    <span class="stat-fruitful">{{ f.fruitful }} fruitful</span>
+                    <span class="stat-barren">{{ f.barren }} barren</span>
+                    {% else %}
+                    <span>No seeds yet</span>
+                    {% endif %}
+                </div>
+                <div class="field-channels">{{ f.channel_count }} channels feeding</div>
+            </a>
+            {% endfor %}
+        </div>
     </div>
+
+    <!-- Channels Tab -->
+    <div id="tab-channels" class="tab-panel">
+        <div class="card">
+            {% for ch in channels %}
+            <div class="channel-row">
+                <div>
+                    <span class="channel-name">{{ ch.name }}</span>
+                    <span class="channel-type">{{ ch.channel_type }}</span>
+                    <span class="badge {% if ch.frequency == 'daily' %}badge-active{% else %}badge-idle{% endif %}">{{ ch.frequency }}</span>
+                    <div class="channel-feeds">Feeds: {{ ch.fields | join(', ') }}</div>
+                </div>
+                <div>
+                    <button class="btn btn-sm btn-scan" onclick="scanChannel('{{ ch.id }}')">Scan Now</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Cases Tab -->
+    <div id="tab-cases" class="tab-panel">
+        {% if cross_field_entities %}
+        <div class="card" style="border-left: 4px solid var(--red);">
+            <strong>Cross-Field Alerts</strong> — entities flagged in multiple fields:
+            {% for entity in cross_field_entities %}
+            <div style="margin-top:0.5rem;">
+                <strong>{{ entity.entity }}</strong> — {{ entity.field_count }} fields ({{ entity.fields | join(', ') }}) — Severity {{ entity.max_severity }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <table>
+                <tr>
+                    <th>#</th><th>Field</th><th>Entity</th><th>Issue</th>
+                    <th>Severity</th><th>Stage</th><th>Since</th><th>Actions</th>
+                </tr>
+                {% for case in cases %}
+                <tr>
+                    <td>{{ case.id }}</td>
+                    <td>{{ case.field }}</td>
+                    <td><strong>{{ case.entity }}</strong></td>
+                    <td>{{ case.issue[:80] }}</td>
+                    <td><span class="severity-{{ case.severity }}">{{ case.severity }}</span></td>
+                    <td><span class="stage-badge stage-{{ case.stage }}">{{ case.stage }}</span></td>
+                    <td>{{ case.stage_entered_at[:10] if case.stage_entered_at else '' }}</td>
+                    <td>
+                        {% if case.stage != 'harvest' %}
+                        <button class="btn btn-sm" onclick="escalateCase({{ case.id }})">Escalate</button>
+                        <button class="btn btn-sm" onclick="resolveCase({{ case.id }})">Resolve</button>
+                        {% else %}
+                        <span style="color:var(--green);">Resolved</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not cases %}
+                <tr><td colspan="8" style="text-align:center; color:var(--muted);">No active cases yet. Run a daily cycle to start detecting signals.</td></tr>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+
+    <!-- Briefing Tab -->
+    <div id="tab-briefing" class="tab-panel">
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                <strong>Latest Briefing</strong>
+                <button class="btn btn-sm" onclick="generateBriefing()">Refresh</button>
+            </div>
+            <pre id="briefingContent">{{ latest_briefing or 'No briefing yet. Click "Generate Briefing" or run a daily cycle.' }}</pre>
+        </div>
+    </div>
+
+    <!-- Submit Report Tab -->
+    <div id="tab-intake" class="tab-panel">
+        <div class="card">
+            <h3 style="margin-bottom:0.75rem; color:var(--soil);">Report a Concern</h3>
+            <p style="font-size:0.85rem; color:var(--muted); margin-bottom:1rem;">
+                Seen something unsafe on Englewood streets? Report it here. Anonymous reports accepted.
+            </p>
+            <form id="intakeForm" onsubmit="submitReport(event)">
+                <div style="margin-bottom:0.75rem;">
+                    <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.25rem;">Category</label>
+                    <select name="category" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:6px;">
+                        <option value="dangerous_driving">Dangerous Driving / Speeding</option>
+                        <option value="commercial_vehicle">Commercial Vehicle Issue</option>
+                        <option value="tow_company">Tow Company Problem</option>
+                        <option value="used_car_dealer">Used Car Dealer Concern</option>
+                        <option value="auto_repair">Auto Repair Shop Issue</option>
+                        <option value="noise_exhaust">Noise / Exhaust Violation</option>
+                        <option value="school_zone">School Zone Safety</option>
+                        <option value="pedestrian_cyclist">Pedestrian / Cyclist Danger</option>
+                        <option value="parking_booting">Parking / Booting Issue</option>
+                        <option value="window_tint">Illegal Window Tint</option>
+                        <option value="registration_plates">Expired Tags / Registration</option>
+                        <option value="emissions">Emissions / Environmental</option>
+                        <option value="intersection_road">Dangerous Intersection / Road</option>
+                        <option value="insurance">Insurance Concern</option>
+                        <option value="dealer_financing">Dealer Financing Problem</option>
+                        <option value="rideshare_delivery">Rideshare / Delivery Driver</option>
+                    </select>
+                </div>
+                <div style="margin-bottom:0.75rem;">
+                    <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.25rem;">Location</label>
+                    <input type="text" name="location" placeholder="e.g., S Broadway & Hampden, Englewood"
+                        style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:6px;">
+                </div>
+                <div style="margin-bottom:0.75rem;">
+                    <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.25rem;">Entity (if known)</label>
+                    <input type="text" name="entity" placeholder="Business name, vehicle description, plate number..."
+                        style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:6px;">
+                </div>
+                <div style="margin-bottom:0.75rem;">
+                    <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.25rem;">Description</label>
+                    <textarea name="description" rows="4" placeholder="What happened? What did you see?"
+                        style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:6px; font-family:inherit;"></textarea>
+                </div>
+                <div style="margin-bottom:0.75rem;">
+                    <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.25rem;">Your Email (optional)</label>
+                    <input type="email" name="email" placeholder="For follow-up (not required)"
+                        style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:6px;">
+                </div>
+                <button type="submit" class="btn btn-primary">Submit Report</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.getElementById('tab-' + tab).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function toast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 4000);
+        }
+
+        function runDailyCycle() {
+            toast('Starting daily cycle... this runs all phases.');
+            fetch('/api/daily-cycle', {method: 'POST'})
+                .then(r => r.json())
+                .then(d => toast(d.message))
+                .catch(e => toast('Error: ' + e));
+        }
+
+        function runGrokScans() {
+            toast('Starting Grok channel scans...');
+            fetch('/api/grok-scan', {method: 'POST'})
+                .then(r => r.json())
+                .then(d => toast(d.message))
+                .catch(e => toast('Error: ' + e));
+        }
+
+        function scanChannel(channelId) {
+            toast('Scanning ' + channelId + '...');
+            fetch('/api/grok-scan?channel=' + channelId, {method: 'POST'})
+                .then(r => r.json())
+                .then(d => toast(d.message))
+                .catch(e => toast('Error: ' + e));
+        }
+
+        function generateBriefing() {
+            toast('Generating briefing...');
+            fetch('/api/briefing')
+                .then(r => r.json())
+                .then(d => {
+                    document.getElementById('briefingContent').textContent = d.briefing;
+                    switchTab('briefing');
+                    // Hacky but works - activate the right tab visually
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab')[3].classList.add('active');
+                    toast('Briefing generated.');
+                });
+        }
+
+        function escalateCase(caseId) {
+            const reason = prompt('Reason for escalation:');
+            if (reason === null) return;
+            fetch('/api/cases/' + caseId + '/escalate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({reason: reason})
+            }).then(r => r.json()).then(d => { toast(d.message); location.reload(); });
+        }
+
+        function resolveCase(caseId) {
+            const resolution = prompt('Resolution:', 'Compliance achieved');
+            if (resolution === null) return;
+            fetch('/api/cases/' + caseId + '/resolve', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({resolution: resolution})
+            }).then(r => r.json()).then(d => { toast(d.message); location.reload(); });
+        }
+
+        function submitReport(e) {
+            e.preventDefault();
+            const form = e.target;
+            const data = {
+                category: form.category.value,
+                location: form.location.value,
+                entity: form.entity.value,
+                description: form.description.value,
+                email: form.email.value,
+            };
+            fetch('/api/intake', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            }).then(r => r.json()).then(d => {
+                toast(d.message);
+                form.reset();
+            });
+        }
+    </script>
 </body>
 </html>

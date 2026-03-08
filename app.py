@@ -2,12 +2,18 @@
 from flask import Flask, request, render_template, jsonify, Response, redirect, url_for
 from wheat.field_manager import FieldManager
 from wheat.paths import load_config, load_projects, save_projects, load_project_config
+from wheat.channels import load_channels, get_channels_for_field, process_intake
+from wheat.escalation import (
+    init_escalation_db, create_case, escalate_case, resolve_case,
+    get_cases_by_field, get_escalation_ready, get_cross_field_entities,
+    daily_escalation_check,
+)
 import sqlite3
 import os
 import json
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, date
 import shutil
 import re
 from tools.stewards_map import get_stewards_map, get_map_as_string
@@ -138,6 +144,10 @@ def init_db():
 
 
 init_db()
+init_escalation_db()
+
+REPORTS_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "reports")
+BRIEFINGS_DIR = os.path.join(REPORTS_DIR, "briefings")
 
 
 # ---------------------------------------------------------------------------
@@ -167,9 +177,10 @@ def get_latest_run(project_id="default"):
 def dashboard():
     projects = load_projects()
     active = state.active_projects()
+    channels = load_channels()
 
-    # Enrich with latest run info
-    project_list = []
+    # Enrich fields with latest run info and channel counts
+    field_list = []
     for pid, pdata in projects.items():
         log, status_data = get_latest_run(pid)
         seeds = status_data["seeds"] if status_data else {}
@@ -177,29 +188,65 @@ def dashboard():
         barren = sum(1 for s in seeds.values() if s["status"] == "Barren")
         growing = sum(1 for s in seeds.values() if s["status"] in ("Growing", "Repairing"))
 
-        # Determine provider from project config
-        pconfig = load_project_config(pid)
-        provider = pconfig.get("llm_api", "venice")
-        # For claude_code, only show project-specific model overrides (not inherited defaults)
-        if provider == "claude_code":
-            models = pdata.get("models", {})
-        else:
-            models = pconfig.get("models", {})
+        field_channels = get_channels_for_field(pid)
 
-        project_list.append({
+        field_list.append({
             "id": pid,
             "name": pdata.get("name", pid),
             "description": pdata.get("description", ""),
             "active": pid in active,
-            "provider": provider,
-            "models": models,
             "fruitful": fruitful,
             "barren": barren,
             "growing": growing,
             "total_seeds": len(seeds),
+            "channel_count": len(field_channels),
         })
 
-    return render_template("dashboard.html", projects=project_list)
+    # Channel list for channels tab
+    channel_list = [
+        {
+            "id": cid,
+            "name": cdata.get("name", cid),
+            "channel_type": cdata.get("channel_type", ""),
+            "frequency": cdata.get("frequency", "daily"),
+            "fields": cdata.get("fields", []),
+        }
+        for cid, cdata in channels.items()
+    ]
+
+    # Cases
+    all_cases = []
+    conn = sqlite3.connect(DB_PATH, timeout=15)
+    c = conn.cursor()
+    c.execute("SELECT * FROM cases WHERE resolved_at IS NULL ORDER BY severity DESC, created_at")
+    columns = [desc[0] for desc in c.description] if c.description else []
+    all_cases = [dict(zip(columns, row)) for row in c.fetchall()] if columns else []
+    conn.close()
+
+    escalation_ready_cases = get_escalation_ready()
+    cross_field = get_cross_field_entities()
+
+    # Latest briefing
+    latest_briefing = None
+    if os.path.exists(BRIEFINGS_DIR):
+        briefing_files = sorted(
+            [f for f in os.listdir(BRIEFINGS_DIR) if f.endswith(".txt")],
+            reverse=True,
+        )
+        if briefing_files:
+            with open(os.path.join(BRIEFINGS_DIR, briefing_files[0]), "r") as f:
+                latest_briefing = f.read()
+
+    return render_template(
+        "dashboard.html",
+        fields=field_list,
+        channels=channel_list,
+        cases=all_cases,
+        active_cases=len(all_cases),
+        escalation_ready=len(escalation_ready_cases),
+        cross_field_entities=cross_field,
+        latest_briefing=latest_briefing,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -216,10 +263,15 @@ def project_field(project_id):
     status = status_data["seeds"] if status_data else {}
     config = load_project_config(project_id)
     project = projects[project_id]
+    field_channels = get_channels_for_field(project_id)
+    field_cases = get_cases_by_field(project_id)
     return render_template("field.html",
                            log=log, status=status,
                            config=config,
-                           config_json=json.dumps(config, indent=2),
+                           field_config=project,
+                           field_channels=field_channels,
+                           field_cases=field_cases,
+                           config_json=json.dumps(project, indent=2),
                            project_id=project_id,
                            project_name=project.get("name", project_id),
                            active=project_id in state.active_projects())
@@ -417,6 +469,131 @@ def get_models():
     sower = Sower()
     models = sower.get_available_models()
     return jsonify({"models": models})
+
+
+# ---------------------------------------------------------------------------
+# API Routes: Intelligence Operations
+# ---------------------------------------------------------------------------
+
+@app.route("/api/daily-cycle", methods=["POST"])
+def api_daily_cycle():
+    """Trigger a full daily cycle in a background thread."""
+    def run_cycle():
+        import subprocess
+        subprocess.run(
+            ["python", "daily_runner.py"],
+            cwd=os.path.dirname(os.path.realpath(__file__)),
+            capture_output=True, text=True,
+        )
+    t = threading.Thread(target=run_cycle, daemon=True)
+    t.start()
+    return jsonify({"message": "Daily cycle started in background. Check briefing tab for results."})
+
+
+@app.route("/api/grok-scan", methods=["POST"])
+def api_grok_scan():
+    """Trigger Grok channel scans."""
+    channel_filter = request.args.get("channel")
+    field_filter = request.args.get("field")
+
+    def run_scan():
+        from wheat.grok_tasks import run_daily_scans
+        if field_filter:
+            # Scan all channels for a specific field
+            field_channels = get_channels_for_field(field_filter)
+            for cid in field_channels:
+                run_daily_scans(channel_filter=cid)
+        else:
+            run_daily_scans(channel_filter=channel_filter)
+
+    t = threading.Thread(target=run_scan, daemon=True)
+    t.start()
+    target = channel_filter or field_filter or "all channels"
+    return jsonify({"message": f"Grok scan started for {target}."})
+
+
+@app.route("/api/briefing")
+def api_briefing():
+    """Generate or retrieve the latest briefing."""
+    # Check for existing briefing
+    os.makedirs(BRIEFINGS_DIR, exist_ok=True)
+    today = date.today().isoformat()
+    today_file = os.path.join(BRIEFINGS_DIR, f"briefing_{today}.txt")
+
+    if os.path.exists(today_file):
+        with open(today_file, "r") as f:
+            return jsonify({"briefing": f.read(), "date": today})
+
+    # Generate from current data
+    projects = load_projects()
+    lines = [
+        f"DAILY INTELLIGENCE BRIEFING — {today}",
+        f"Venetian Wheat — Englewood, CO",
+        "=" * 50,
+        "",
+    ]
+
+    total_cases = 0
+    for pid, pdata in projects.items():
+        log, status_data = get_latest_run(pid)
+        seeds = status_data["seeds"] if status_data else {}
+        cases = get_cases_by_field(pid)
+        total_cases += len(cases)
+        fruitful = sum(1 for s in seeds.values() if s["status"] == "Fruitful")
+        lines.append(f"{pid}: {fruitful} fruitful seeds, {len(cases)} active cases")
+
+    lines.append("")
+    lines.append(f"Total active cases: {total_cases}")
+
+    esc = daily_escalation_check()
+    if esc:
+        lines.append("")
+        lines.append(esc)
+
+    briefing = "\n".join(lines)
+
+    with open(today_file, "w") as f:
+        f.write(briefing)
+
+    return jsonify({"briefing": briefing, "date": today})
+
+
+@app.route("/api/cases/<int:case_id>/escalate", methods=["POST"])
+def api_escalate_case(case_id):
+    """Escalate a case to the next stage."""
+    data = request.get_json() or {}
+    reason = data.get("reason", "Manual escalation from dashboard")
+    try:
+        escalate_case(case_id, reason=reason)
+        return jsonify({"message": f"Case #{case_id} escalated."})
+    except ValueError as e:
+        return jsonify({"message": str(e)}), 404
+
+
+@app.route("/api/cases/<int:case_id>/resolve", methods=["POST"])
+def api_resolve_case(case_id):
+    """Resolve a case."""
+    data = request.get_json() or {}
+    resolution = data.get("resolution", "Compliance achieved")
+    try:
+        resolve_case(case_id, resolution=resolution)
+        return jsonify({"message": f"Case #{case_id} resolved: {resolution}"})
+    except ValueError as e:
+        return jsonify({"message": str(e)}), 404
+
+
+@app.route("/api/intake", methods=["POST"])
+def api_intake():
+    """Accept a community report."""
+    data = request.get_json()
+    if not data or not data.get("description"):
+        return jsonify({"message": "Description is required."}), 400
+    result = process_intake(data)
+    return jsonify({
+        "message": f"Report received and routed to {result['target_field']}. Thank you.",
+        "target_field": result["target_field"],
+        "report_file": result["report_file"],
+    })
 
 
 if __name__ == "__main__":

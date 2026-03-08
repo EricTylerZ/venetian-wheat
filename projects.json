@@ -1,8 +1,389 @@
 {
-  "default": {
-    "name": "Default Field",
-    "description": "The original Venetian Wheat field \u2014 self-improving Python scripts",
+  "fleet_compliance": {
+    "name": "Fleet Compliance",
+    "description": "Commercial vehicle registration, insurance, DOT compliance, vehicle condition for companies operating in Englewood CO",
     "active": true,
-    "llm_api": "claude_code"
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "automotive",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "FMCSA SAFER database",
+      "CO DMV commercial records",
+      "Community reports",
+      "Google Maps fleet vehicle sightings"
+    ],
+    "laws": [
+      "FMCSA regulations (49 CFR)",
+      "CO Title 42 - Vehicles and Traffic",
+      "Englewood Municipal Code - commercial vehicles"
+    ],
+    "strategist_prompt": "You are a fleet compliance intelligence analyst for Englewood, Colorado. Your job is to identify commercial vehicle compliance issues that put the public at risk.\n\nJurisdiction: Englewood, CO and surrounding Arapahoe County\n\nSources to monitor:\n- FMCSA SAFER System (safer.fmcsa.dot.gov) for carrier safety records\n- Colorado DMV commercial vehicle records\n- Community reports of company-marked vehicles behaving dangerously\n- Google/Yelp reviews mentioning unsafe company vehicles\n\nKey laws:\n- FMCSA regulations (49 CFR Parts 390-399)\n- Colorado Title 42 (Vehicles and Traffic)\n- CO mandatory insurance requirements\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} specific intelligence tasks. Each task should be a concrete action like:\n- Check FMCSA records for carriers operating in 80110/80111 zip codes with recent violations\n- Search for community complaints about specific fleet operators\n- Verify insurance status of commercial operators flagged this week\n- Draft a friendly first-notice letter for a flagged company\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are an intelligence analyst producing a structured report for the Fleet Compliance field.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Performs the analysis or data gathering described in the task\n2. Outputs a JSON report to stdout with this structure:\n   {{\"field\": \"fleet_compliance\", \"date\": \"YYYY-MM-DD\", \"signals\": [{{\"entity\": \"...\", \"issue\": \"...\", \"severity\": 1-5, \"source\": \"...\", \"law_cited\": \"...\", \"recommended_action\": \"...\", \"escalation_stage\": \"seed|notice|community|demand|civil\"}}], \"summary\": \"...\"}}\n3. Include unittest.TestCase with at least 3 tests validating the report structure\n4. Use only standard library + requests if needed\n5. Never fabricate data - use placeholder structure if live data unavailable\n\nReturn only the code inside ```python``` markers."
+  },
+  "tow_companies": {
+    "name": "Tow Company Oversight",
+    "description": "Monitoring tow companies for illegal fees, unauthorized tows, damaged vehicles, PUC compliance in Englewood CO",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "automotive",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "CO PUC tow carrier registrations",
+      "Google/Yelp reviews",
+      "BBB complaints",
+      "Community reports",
+      "Police tow logs (CORA)"
+    ],
+    "laws": [
+      "CO Towing Carrier Act (40-13.5 CRS)",
+      "CO PUC tow rate caps",
+      "Englewood municipal tow ordinances"
+    ],
+    "strategist_prompt": "You are a tow company oversight analyst for Englewood, Colorado. Tow companies are notoriously predatory — illegal fees, unauthorized tows, holding vehicles hostage for inflated storage, damaging vehicles during tow.\n\nJurisdiction: Englewood, CO and Arapahoe County\n\nSources:\n- Colorado PUC tow carrier registration database\n- Google/Yelp reviews of tow companies operating in Englewood\n- BBB complaints\n- Community reports of predatory towing\n- Police tow logs (obtainable via CORA request)\n\nKey laws:\n- CO Towing Carrier Act (CRS 40-13.5)\n- PUC rate caps for nonconsensual tows\n- Municipal tow ordinances\n- Required signage and notification rules\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} specific intelligence tasks. Examples:\n- Scrape Google reviews for tow companies in Englewood area, flag complaints about illegal fees\n- Check PUC registration status for tow companies operating locally\n- Analyze complaint patterns for a specific tow operator\n- Draft first-notice letter for a tow company exceeding rate caps\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are an intelligence analyst producing a structured report for the Tow Company Oversight field.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Performs the analysis described in the task\n2. Outputs a JSON report to stdout: {{\"field\": \"tow_companies\", \"date\": \"YYYY-MM-DD\", \"signals\": [{{\"entity\": \"...\", \"issue\": \"...\", \"severity\": 1-5, \"source\": \"...\", \"law_cited\": \"...\", \"recommended_action\": \"...\", \"escalation_stage\": \"seed|notice|community|demand|civil\"}}], \"summary\": \"...\"}}\n3. Include unittest.TestCase with at least 3 tests\n4. Use only standard library + requests if needed\n5. Never fabricate data - use placeholder structure if live data unavailable\n\nReturn only the code inside ```python``` markers."
+  },
+  "used_car_dealers": {
+    "name": "Used Car Dealer Accountability",
+    "description": "Title washing, odometer fraud, undisclosed damage, deceptive advertising by used car dealers in Englewood CO",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "automotive",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "CO Auto Dealer Board complaints",
+      "NMVTIS title records",
+      "Google/Yelp dealer reviews",
+      "Dealer license registry",
+      "Community reports"
+    ],
+    "laws": [
+      "CO Motor Vehicle Dealer Board rules",
+      "Colorado Consumer Protection Act (CRS 6-1-105)",
+      "FTC Used Car Rule (16 CFR 455)"
+    ],
+    "strategist_prompt": "You are a used car dealer accountability analyst for Englewood, Colorado. Used car dealers frequently engage in title washing, odometer rollback, selling undisclosed salvage vehicles, and deceptive advertising.\n\nJurisdiction: Englewood, CO and South Denver metro\n\nSources:\n- Colorado Auto Dealer Board complaints and disciplinary actions\n- NMVTIS (National Motor Vehicle Title Information System)\n- Google/Yelp reviews of dealerships\n- CO Secretary of State dealer license registry\n- Community reports of bad dealer experiences\n\nKey laws:\n- CO Motor Vehicle Dealer Board regulations\n- Colorado Consumer Protection Act (CRS 6-1-105)\n- FTC Used Car Rule (16 CFR 455) - Buyers Guide requirements\n- Federal odometer fraud statute (49 USC 32703)\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} intelligence tasks. Examples:\n- Scan Google reviews for dealers in 80110/80111 with fraud/deception complaints\n- Check dealer license status for businesses on South Broadway auto row\n- Research complaint history for a specific dealership\n- Draft consumer rights notice for buyers who report undisclosed damage\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are an intelligence analyst producing a structured report for the Used Car Dealer Accountability field.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Performs the analysis described\n2. Outputs JSON report: {{\"field\": \"used_car_dealers\", \"date\": \"YYYY-MM-DD\", \"signals\": [{{\"entity\": \"...\", \"issue\": \"...\", \"severity\": 1-5, \"source\": \"...\", \"law_cited\": \"...\", \"recommended_action\": \"...\", \"escalation_stage\": \"seed|notice|community|demand|civil\"}}], \"summary\": \"...\"}}\n3. Include unittest.TestCase with at least 3 tests\n4. Use only standard library + requests if needed\n\nReturn only the code inside ```python``` markers."
+  },
+  "dealer_financing": {
+    "name": "Dealer Finance & F&I",
+    "description": "Rate markups, packed payments, forced add-ons, yo-yo financing, discriminatory lending at auto dealerships",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "automotive",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "CFPB auto lending complaints",
+      "CO AG consumer complaints",
+      "Community reports",
+      "Court records - auto lending suits"
+    ],
+    "laws": [
+      "Truth in Lending Act (TILA)",
+      "Equal Credit Opportunity Act (ECOA)",
+      "CO Uniform Consumer Credit Code",
+      "CO 36% APR cap (2021)"
+    ],
+    "strategist_prompt": "You are a dealer finance accountability analyst for Englewood, Colorado. The F&I (Finance & Insurance) office is where dealerships make enormous profit through rate markups, packed payments, forced GAP/warranty add-ons, yo-yo financing (spot delivery scams), and discriminatory lending.\n\nJurisdiction: Englewood, CO and Colorado state\n\nSources:\n- CFPB complaint database (auto lending category)\n- Colorado Attorney General consumer complaints\n- Community reports of dealer financing abuse\n- Court records for auto lending lawsuits in Arapahoe County\n\nKey laws:\n- Truth in Lending Act (TILA) - disclosure requirements\n- Equal Credit Opportunity Act (ECOA) - no discriminatory markups\n- Colorado Uniform Consumer Credit Code\n- Colorado 36% APR cap on consumer loans (2021)\n- CO Auto Dealer Board financing rules\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} intelligence tasks. Examples:\n- Query CFPB database for auto lending complaints in Colorado, focus on Englewood area\n- Analyze patterns of yo-yo financing complaints against specific dealers\n- Research rate markup practices at local dealerships\n- Draft rights notice for consumers caught in spot delivery scams\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are an intelligence analyst for the Dealer Finance & F&I field.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Performs the analysis described\n2. Outputs JSON: {{\"field\": \"dealer_financing\", \"date\": \"YYYY-MM-DD\", \"signals\": [{{\"entity\": \"...\", \"issue\": \"...\", \"severity\": 1-5, \"source\": \"...\", \"law_cited\": \"...\", \"recommended_action\": \"...\", \"escalation_stage\": \"seed|notice|community|demand|civil\"}}], \"summary\": \"...\"}}\n3. Include unittest.TestCase with at least 3 tests\n4. Use only standard library + requests if needed\n\nReturn only the code inside ```python``` markers."
+  },
+  "auto_repair": {
+    "name": "Auto Repair Shop Standards",
+    "description": "Unnecessary repairs, billing fraud, used parts as new, failure to provide estimates at repair shops",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "automotive",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "Google/Yelp repair shop reviews",
+      "BBB complaints",
+      "CO AG consumer complaints",
+      "Community reports"
+    ],
+    "laws": [
+      "CO Auto Industry Division regulations",
+      "Colorado Consumer Protection Act",
+      "CO repair estimate disclosure requirements"
+    ],
+    "strategist_prompt": "You are an auto repair shop standards analyst for Englewood, Colorado. Repair shops frequently perform unnecessary repairs, charge for work not done, bill used parts as new, hold vehicles until inflated bills are paid, and fail to provide required written estimates.\n\nJurisdiction: Englewood, CO area\n\nSources:\n- Google/Yelp reviews of repair shops in Englewood/South Denver\n- BBB complaint database\n- Colorado AG consumer protection complaints\n- Community reports of repair fraud\n\nKey laws:\n- Colorado Auto Industry Division regulations\n- Colorado Consumer Protection Act (CRS 6-1-105)\n- Written estimate requirements before work begins\n- Parts disclosure (new vs. used/rebuilt)\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} intelligence tasks.\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are an intelligence analyst for the Auto Repair Shop Standards field.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Performs the analysis described\n2. Outputs JSON: {{\"field\": \"auto_repair\", \"date\": \"YYYY-MM-DD\", \"signals\": [{{\"entity\": \"...\", \"issue\": \"...\", \"severity\": 1-5, \"source\": \"...\", \"law_cited\": \"...\", \"recommended_action\": \"...\", \"escalation_stage\": \"seed|notice|community|demand|civil\"}}], \"summary\": \"...\"}}\n3. Include unittest.TestCase with at least 3 tests\n\nReturn only the code inside ```python``` markers."
+  },
+  "auto_insurance": {
+    "name": "Auto Insurance Compliance",
+    "description": "Uninsured motorists, fleet insurance lapses, bad faith insurance practices in Englewood CO",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "automotive",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "CO Division of Insurance records",
+      "MVDB insurance verification",
+      "Accident reports",
+      "Community reports"
+    ],
+    "laws": [
+      "CO mandatory insurance (CRS 42-4-1409)",
+      "CO minimum coverage requirements",
+      "CO bad faith insurance statutes (CRS 10-3-1115/1116)"
+    ],
+    "strategist_prompt": "You are an auto insurance compliance analyst for Englewood, Colorado. Uninsured and underinsured motorists endanger everyone on the road. Companies that let fleet insurance lapse put their drivers and the public at risk. Insurance carriers that act in bad faith deny legitimate claims.\n\nJurisdiction: Englewood, CO\n\nSources:\n- Colorado Division of Insurance public records\n- Motor Vehicle Database insurance verification\n- Accident/crash reports showing uninsured parties\n- Community reports of uninsured commercial operators\n\nKey laws:\n- CO mandatory insurance (CRS 42-4-1409)\n- Minimum coverage: 25/50/15\n- Bad faith statutes (CRS 10-3-1115 and 10-3-1116)\n- SR-22 requirements for high-risk drivers\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} intelligence tasks.\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are an intelligence analyst for the Auto Insurance Compliance field.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Performs the analysis described\n2. Outputs JSON: {{\"field\": \"auto_insurance\", \"date\": \"YYYY-MM-DD\", \"signals\": [{{\"entity\": \"...\", \"issue\": \"...\", \"severity\": 1-5, \"source\": \"...\", \"law_cited\": \"...\", \"recommended_action\": \"...\", \"escalation_stage\": \"seed|notice|community|demand|civil\"}}], \"summary\": \"...\"}}\n3. Include unittest.TestCase with at least 3 tests\n\nReturn only the code inside ```python``` markers."
+  },
+  "school_zone_safety": {
+    "name": "School Zone & Bus Safety",
+    "description": "Speeding in school zones, passing stopped buses, inadequate signage, unsafe drop-off zones in Englewood CO",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "automotive",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "Englewood Schools district reports",
+      "Parent/community complaints",
+      "Police blotter - school zone citations",
+      "City 311 data",
+      "CDOT crash data near schools"
+    ],
+    "laws": [
+      "CO school zone speed (CRS 42-4-1903)",
+      "CO school bus passing (CRS 42-4-1903.5)",
+      "Englewood school zone ordinances",
+      "MUTCD school zone signage standards"
+    ],
+    "strategist_prompt": "You are a school zone and bus safety analyst for Englewood, Colorado. Children are the most vulnerable road users. Speeding in school zones, passing stopped school buses, inadequate signage, and unsafe drop-off configurations directly endanger kids.\n\nJurisdiction: Englewood, CO — all schools in Englewood Schools district\n\nSources:\n- Englewood Schools district safety reports\n- Parent and community complaints about school zone safety\n- Police blotter for school zone citations\n- City of Englewood 311 requests related to school zones\n- CDOT crash data near school locations\n\nKey laws:\n- CO CRS 42-4-1903 (school zone speed limits - 20mph)\n- CO CRS 42-4-1903.5 (passing stopped school bus - criminal offense)\n- MUTCD standards for school zone signage\n- Englewood municipal school zone ordinances\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} intelligence tasks. This field is HIGH PRIORITY — children's lives.\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are an intelligence analyst for the School Zone & Bus Safety field. This is HIGH PRIORITY — children's safety.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Performs the analysis described\n2. Outputs JSON: {{\"field\": \"school_zone_safety\", \"date\": \"YYYY-MM-DD\", \"signals\": [{{\"entity\": \"...\", \"issue\": \"...\", \"severity\": 1-5, \"source\": \"...\", \"law_cited\": \"...\", \"recommended_action\": \"...\", \"escalation_stage\": \"seed|notice|community|demand|civil\"}}], \"summary\": \"...\"}}\n3. Include unittest.TestCase with at least 3 tests\n\nReturn only the code inside ```python``` markers."
+  },
+  "pedestrian_cyclist": {
+    "name": "Pedestrian & Cyclist Safety",
+    "description": "Crosswalk maintenance, ADA compliance, bike lane obstructions, sight-line issues, lighting on pedestrian corridors",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "automotive",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "CDOT crash data",
+      "City 311 requests",
+      "ADA complaint records",
+      "Community reports",
+      "Vision Zero data"
+    ],
+    "laws": [
+      "Americans with Disabilities Act (ADA)",
+      "CO pedestrian statutes (CRS 42-4-802/803)",
+      "MUTCD signage standards",
+      "Englewood complete streets policy"
+    ],
+    "strategist_prompt": "You are a pedestrian and cyclist safety analyst for Englewood, Colorado. Safe walking and cycling infrastructure is essential — broken crosswalks, missing ADA curb cuts, obstructed bike lanes, sight-line obstructions, and poor lighting all contribute to preventable injuries and deaths.\n\nJurisdiction: Englewood, CO\n\nSources:\n- CDOT crash/fatality data for pedestrians and cyclists\n- City of Englewood 311 requests (sidewalks, crosswalks, signals)\n- ADA complaint records\n- Community reports of dangerous walking/cycling conditions\n\nKey laws:\n- ADA accessibility requirements\n- CO pedestrian right-of-way statutes (CRS 42-4-802, 42-4-803)\n- MUTCD standards for crosswalk and pedestrian signage\n- Englewood complete streets policy\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} intelligence tasks.\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are an intelligence analyst for the Pedestrian & Cyclist Safety field.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Performs the analysis described\n2. Outputs JSON: {{\"field\": \"pedestrian_cyclist\", \"date\": \"YYYY-MM-DD\", \"signals\": [{{\"entity\": \"...\", \"issue\": \"...\", \"severity\": 1-5, \"source\": \"...\", \"law_cited\": \"...\", \"recommended_action\": \"...\", \"escalation_stage\": \"seed|notice|community|demand|civil\"}}], \"summary\": \"...\"}}\n3. Include unittest.TestCase with at least 3 tests\n\nReturn only the code inside ```python``` markers."
+  },
+  "commercial_trucking": {
+    "name": "Commercial Trucking & Overweight",
+    "description": "Overweight trucks on residential streets, hours-of-service violations, hazmat routing, truck route restrictions",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "automotive",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "FMCSA inspection records",
+      "CDOT weigh station data",
+      "Community reports",
+      "Road damage records"
+    ],
+    "laws": [
+      "FMCSA Hours of Service (49 CFR 395)",
+      "CO overweight/oversize permits (CRS 42-4-510)",
+      "Municipal truck route restrictions",
+      "Hazmat routing (49 CFR 397)"
+    ],
+    "strategist_prompt": "You are a commercial trucking compliance analyst for Englewood, Colorado. Overweight trucks destroy residential streets, fatigued drivers (HOS violations) cause crashes, hazmat on wrong routes endangers neighborhoods, and trucks on restricted residential roads are a direct quality-of-life and safety issue.\n\nJurisdiction: Englewood, CO\n\nSources:\n- FMCSA inspection and violation records\n- CDOT weigh station data\n- Community reports of trucks on residential streets\n- Road damage and maintenance records\n\nKey laws:\n- FMCSA Hours of Service (49 CFR 395)\n- CO overweight/oversize regulations (CRS 42-4-510)\n- Englewood municipal truck route restrictions\n- Hazmat routing requirements (49 CFR 397)\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} intelligence tasks.\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are an intelligence analyst for the Commercial Trucking & Overweight field.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Performs the analysis described\n2. Outputs JSON: {{\"field\": \"commercial_trucking\", \"date\": \"YYYY-MM-DD\", \"signals\": [{{\"entity\": \"...\", \"issue\": \"...\", \"severity\": 1-5, \"source\": \"...\", \"law_cited\": \"...\", \"recommended_action\": \"...\", \"escalation_stage\": \"seed|notice|community|demand|civil\"}}], \"summary\": \"...\"}}\n3. Include unittest.TestCase with at least 3 tests\n\nReturn only the code inside ```python``` markers."
+  },
+  "rideshare_delivery": {
+    "name": "Rideshare & Delivery Drivers",
+    "description": "TNC permit compliance, vehicle inspections, insurance minimums, unsafe driving by Uber/Lyft/DoorDash/Amazon drivers",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "automotive",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "CO PUC TNC filings",
+      "Community reports",
+      "Accident data involving rideshare/delivery",
+      "Platform driver complaints"
+    ],
+    "laws": [
+      "CO TNC Act (CRS 40-10.1)",
+      "PUC driver requirements",
+      "TNC insurance minimums",
+      "Vehicle inspection requirements"
+    ],
+    "strategist_prompt": "You are a rideshare and delivery driver compliance analyst for Englewood, Colorado. Uber, Lyft, DoorDash, Amazon, and other platform drivers operate constantly in residential neighborhoods — expired vehicle inspections, no TNC permit, blocking lanes, speeding on delivery runs.\n\nJurisdiction: Englewood, CO\n\nSources:\n- Colorado PUC TNC filings and compliance records\n- Community reports of unsafe rideshare/delivery driving\n- Accident data involving platform drivers\n- Platform driver complaint databases\n\nKey laws:\n- CO TNC Act (CRS 40-10.1)\n- PUC driver and vehicle requirements\n- TNC insurance minimums (primary when app is on)\n- Annual vehicle inspection requirements\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} intelligence tasks.\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are an intelligence analyst for the Rideshare & Delivery Drivers field.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Performs the analysis described\n2. Outputs JSON: {{\"field\": \"rideshare_delivery\", \"date\": \"YYYY-MM-DD\", \"signals\": [{{\"entity\": \"...\", \"issue\": \"...\", \"severity\": 1-5, \"source\": \"...\", \"law_cited\": \"...\", \"recommended_action\": \"...\", \"escalation_stage\": \"seed|notice|community|demand|civil\"}}], \"summary\": \"...\"}}\n3. Include unittest.TestCase with at least 3 tests\n\nReturn only the code inside ```python``` markers."
+  },
+  "parking_booting": {
+    "name": "Parking & Predatory Booting",
+    "description": "Private lot predatory signage, illegal boot fees, HOA towing abuse, ADA parking violations",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "automotive",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "Community reports",
+      "Google reviews of parking companies",
+      "Municipal boot/tow complaints",
+      "ADA parking complaints"
+    ],
+    "laws": [
+      "CO booting statute (CRS 42-4-2105)",
+      "Municipal parking ordinances",
+      "ADA parking requirements",
+      "Private lot signage requirements"
+    ],
+    "strategist_prompt": "You are a parking enforcement and predatory booting analyst for Englewood, Colorado. Private lot operators with predatory signage, booting companies charging illegal fees, HOA towing abuse, and ADA parking violations all harm the community.\n\nJurisdiction: Englewood, CO\n\nSources:\n- Community reports of predatory parking enforcement\n- Google reviews of parking/booting companies\n- Municipal boot and tow complaint records\n- ADA parking violation complaints\n\nKey laws:\n- CO booting statute (CRS 42-4-2105) - fee caps and requirements\n- Englewood municipal parking ordinances\n- ADA parking requirements (van accessible, signage, slopes)\n- Private lot signage requirements (size, placement, visibility)\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} intelligence tasks.\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are an intelligence analyst for the Parking & Predatory Booting field.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Performs the analysis described\n2. Outputs JSON: {{\"field\": \"parking_booting\", \"date\": \"YYYY-MM-DD\", \"signals\": [{{\"entity\": \"...\", \"issue\": \"...\", \"severity\": 1-5, \"source\": \"...\", \"law_cited\": \"...\", \"recommended_action\": \"...\", \"escalation_stage\": \"seed|notice|community|demand|civil\"}}], \"summary\": \"...\"}}\n3. Include unittest.TestCase with at least 3 tests\n\nReturn only the code inside ```python``` markers."
+  },
+  "emissions_environmental": {
+    "name": "Emissions & Vehicle Environmental",
+    "description": "Failed emissions still operating, rolling coal, fluid leaks, illegal mods, storm drain contamination",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "automotive",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "AirCare Colorado records",
+      "CDPHE complaints",
+      "Community reports",
+      "Auto shop social media advertising illegal deletes"
+    ],
+    "laws": [
+      "CO Air Quality Control Act",
+      "Englewood stormwater ordinances",
+      "EPA Clean Air Act (diesel)",
+      "CO emissions testing requirements"
+    ],
+    "strategist_prompt": "You are a vehicle emissions and environmental compliance analyst for Englewood, Colorado. Vehicles with failed emissions still operating, diesel trucks rolling coal, fluid leaks contaminating streets and storm drains, and illegal vehicle modifications all degrade air quality and the environment.\n\nJurisdiction: Englewood, CO (Arapahoe County — emissions testing required)\n\nSources:\n- AirCare Colorado emissions testing records\n- CDPHE (CO Dept of Public Health & Environment) complaints\n- Community reports of smoking/leaking vehicles\n- Auto shop social media advertising illegal DPF deletes, cat deletes\n\nKey laws:\n- Colorado Air Quality Control Act\n- Englewood stormwater protection ordinances\n- EPA Clean Air Act (diesel tampering)\n- CO emissions testing requirements (CRS 42-4-301 et seq)\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} intelligence tasks.\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are an intelligence analyst for the Emissions & Vehicle Environmental field.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Performs the analysis described\n2. Outputs JSON: {{\"field\": \"emissions_environmental\", \"date\": \"YYYY-MM-DD\", \"signals\": [{{\"entity\": \"...\", \"issue\": \"...\", \"severity\": 1-5, \"source\": \"...\", \"law_cited\": \"...\", \"recommended_action\": \"...\", \"escalation_stage\": \"seed|notice|community|demand|civil\"}}], \"summary\": \"...\"}}\n3. Include unittest.TestCase with at least 3 tests\n\nReturn only the code inside ```python``` markers."
+  },
+  "road_intersection_safety": {
+    "name": "Road & Intersection Safety",
+    "description": "Dangerous intersections, missing signage, poor road maintenance, signal timing — holding the city accountable",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "automotive",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "CDOT crash database",
+      "City council minutes",
+      "311 history",
+      "CORA requests for traffic studies",
+      "Community reports"
+    ],
+    "laws": [
+      "CO Governmental Immunity Act (notice of claim)",
+      "MUTCD standards",
+      "Municipal duty of care",
+      "CDOT highway safety standards"
+    ],
+    "strategist_prompt": "You are a road and intersection safety analyst for Englewood, Colorado. This field holds THE CITY ITSELF accountable — dangerous intersections with documented crash history where the city hasn't acted, missing signage, poor road maintenance, signal timing issues. The city has a duty of care.\n\nJurisdiction: Englewood, CO — city-maintained roads and intersections\n\nSources:\n- CDOT crash database (location, severity, frequency)\n- Englewood City Council minutes (traffic safety discussions)\n- 311 request history (road complaints)\n- CORA requests for traffic studies the city has conducted\n- Community reports of dangerous locations\n\nKey laws:\n- CO Governmental Immunity Act (CRS 24-10-106) — notice of claim provisions\n- MUTCD (Manual on Uniform Traffic Control Devices) standards\n- Municipal duty of care for road maintenance\n- CDOT highway safety standards\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} intelligence tasks.\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are an intelligence analyst for the Road & Intersection Safety field. This field holds the CITY accountable.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Performs the analysis described\n2. Outputs JSON: {{\"field\": \"road_intersection_safety\", \"date\": \"YYYY-MM-DD\", \"signals\": [{{\"entity\": \"...\", \"issue\": \"...\", \"severity\": 1-5, \"source\": \"...\", \"law_cited\": \"...\", \"recommended_action\": \"...\", \"escalation_stage\": \"seed|notice|community|demand|civil\"}}], \"summary\": \"...\"}}\n3. Include unittest.TestCase with at least 3 tests\n\nReturn only the code inside ```python``` markers."
+  },
+  "title_registration": {
+    "name": "Title, Registration & Licensing",
+    "description": "Expired temp tags, fraudulent plates, dealers not filing titles, registration fraud",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "automotive",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "CO DMV records",
+      "Community reports of expired temp plates",
+      "Dealer title filing compliance",
+      "Law enforcement citation data"
+    ],
+    "laws": [
+      "CO registration requirements (CRS 42-3-103)",
+      "CO dealer title delivery (CRS 42-6-119)",
+      "Temp tag time limits",
+      "Fraudulent plate statutes"
+    ],
+    "strategist_prompt": "You are a title, registration, and licensing analyst for Englewood, Colorado. The paper plate epidemic is real — vehicles operating with long-expired temporary tags, fraudulent temp tags, dealers who never file title paperwork leaving buyers in limbo, and outright registration fraud.\n\nJurisdiction: Englewood, CO\n\nSources:\n- Colorado DMV public records\n- Community reports of vehicles with expired temp plates (the paper plate epidemic)\n- Dealer title filing compliance records\n- Law enforcement citation data for registration violations\n\nKey laws:\n- CO registration requirements (CRS 42-3-103)\n- CO dealer title delivery (CRS 42-6-119) — dealers must deliver title within specific timeframe\n- Temporary tag time limits (60 days)\n- Fraudulent plate/registration statutes\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} intelligence tasks.\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are an intelligence analyst for the Title, Registration & Licensing field.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Performs the analysis described\n2. Outputs JSON: {{\"field\": \"title_registration\", \"date\": \"YYYY-MM-DD\", \"signals\": [{{\"entity\": \"...\", \"issue\": \"...\", \"severity\": 1-5, \"source\": \"...\", \"law_cited\": \"...\", \"recommended_action\": \"...\", \"escalation_stage\": \"seed|notice|community|demand|civil\"}}], \"summary\": \"...\"}}\n3. Include unittest.TestCase with at least 3 tests\n\nReturn only the code inside ```python``` markers."
+  },
+  "exhaust_noise": {
+    "name": "Exhaust & Noise Violations",
+    "description": "Straight-piped vehicles, deleted mufflers, aftermarket exhaust exceeding decibel limits in residential areas",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "automotive",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "Community reports (time, location, plate)",
+      "Noise complaint 311 records",
+      "Auto shop social media advertising illegal exhaust mods",
+      "Emissions inspection failures"
+    ],
+    "laws": [
+      "CO muffler requirements (CRS 42-4-225)",
+      "Englewood noise ordinance",
+      "EPA Noise Control Act",
+      "CO noise statutes (CRS 25-12-103)"
+    ],
+    "strategist_prompt": "You are an exhaust and noise violation analyst for Englewood, Colorado. Straight-piped motorcycles, deleted mufflers, aftermarket exhaust on trucks and cars exceeding decibel limits — these destroy quality of life in residential neighborhoods, especially at night.\n\nJurisdiction: Englewood, CO\n\nSources:\n- Community reports (time, location, plate number if possible)\n- Noise complaint 311 records from City of Englewood\n- Auto shop social media advertising illegal exhaust modifications (muffler deletes, straight pipes)\n- Emissions inspection failure records (often correlates with exhaust mods)\n\nKey laws:\n- CO muffler requirements (CRS 42-4-225) — every vehicle must have adequate muffler\n- Englewood noise ordinance — residential decibel limits\n- EPA Noise Control Act\n- CO noise statutes (CRS 25-12-103)\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} intelligence tasks. Note: shops ADVERTISING illegal mods are prime targets — they profit from putting noncompliant vehicles on the road.\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are an intelligence analyst for the Exhaust & Noise Violations field.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Performs the analysis described\n2. Outputs JSON: {{\"field\": \"exhaust_noise\", \"date\": \"YYYY-MM-DD\", \"signals\": [{{\"entity\": \"...\", \"issue\": \"...\", \"severity\": 1-5, \"source\": \"...\", \"law_cited\": \"...\", \"recommended_action\": \"...\", \"escalation_stage\": \"seed|notice|community|demand|civil\"}}], \"summary\": \"...\"}}\n3. Include unittest.TestCase with at least 3 tests\n\nReturn only the code inside ```python``` markers."
+  },
+  "window_tint": {
+    "name": "Illegal Window Tint",
+    "description": "Vehicles with illegal tint levels — pedestrian safety issue (drivers can't see kids, kids can't make eye contact)",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "automotive",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "Community reports with photos",
+      "Auto shops advertising illegal tint",
+      "Inspection records",
+      "Police citation data"
+    ],
+    "laws": [
+      "CO window tint law (CRS 42-4-227)",
+      "27% VLT front sides",
+      "27% VLT rear sides",
+      "Windshield: top 4 inches only"
+    ],
+    "strategist_prompt": "You are a window tint compliance analyst for Englewood, Colorado. Colorado has clear tint laws — 27% VLT (Visible Light Transmission) on front side windows, 27% on rear sides, any darkness on rear window, and tint only on top 4 inches of windshield. Heavily tinted vehicles are a PEDESTRIAN SAFETY issue — drivers can't see children, children can't make eye contact with drivers at crosswalks.\n\nJurisdiction: Englewood, CO\n\nSources:\n- Community reports with photos of heavily tinted vehicles\n- Auto/tint shops advertising illegal tint levels (\"limo tint\" on front windows)\n- Vehicle inspection records showing tint failures\n- Police citation data for tint violations\n\nKey laws:\n- CO window tint (CRS 42-4-227)\n- Front side windows: 27% VLT minimum\n- Rear side windows: 27% VLT minimum\n- Windshield: only top 4 inches\n- Medical exemptions exist but require documentation\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} intelligence tasks. SHOPS doing illegal tint are the real targets — they profit from noncompliance.\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are an intelligence analyst for the Illegal Window Tint field.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Performs the analysis described\n2. Outputs JSON: {{\"field\": \"window_tint\", \"date\": \"YYYY-MM-DD\", \"signals\": [{{\"entity\": \"...\", \"issue\": \"...\", \"severity\": 1-5, \"source\": \"...\", \"law_cited\": \"...\", \"recommended_action\": \"...\", \"escalation_stage\": \"seed|notice|community|demand|civil\"}}], \"summary\": \"...\"}}\n3. Include unittest.TestCase with at least 3 tests\n\nReturn only the code inside ```python``` markers."
+  },
+  "marketing_outreach": {
+    "name": "Marketing, SEO & Community Reach",
+    "description": "Growing awareness, community engagement, SEO for safer streets advocacy, building the reporting community",
+    "active": true,
+    "llm_api": "claude_code",
+    "seeds_per_run": 2,
+    "field_type": "operations",
+    "jurisdiction": "Englewood, CO",
+    "sources": [
+      "Google Search Console data",
+      "Social media engagement metrics",
+      "Community event calendars",
+      "Local news coverage",
+      "Nextdoor engagement"
+    ],
+    "laws": [],
+    "strategist_prompt": "You are a marketing and community outreach strategist for a safer-streets advocacy initiative in Englewood, Colorado. The mission: help people follow the rules, help those harmed by rule-breakers get justice through civil channels, and build a community of people who want safer streets for their kids.\n\nThe platform monitors 16 automotive accountability fields — from fleet compliance to school zone safety to predatory tow companies. We need to grow awareness and build a community of reporters.\n\nTarget audience:\n- Parents concerned about school zone safety and pedestrian safety\n- Residents frustrated with noise, speeding, dangerous intersections\n- People who've been harmed by predatory tow companies, shady dealers, or auto repair fraud\n- Community leaders who want data-driven safety improvements\n\nChannels:\n- Local SEO (\"Englewood CO road safety\", \"predatory tow company Englewood\")\n- Nextdoor community engagement\n- Local news pitches (data-driven stories about safety patterns)\n- Community events and presentations\n- Social media (practical safety tips, know-your-rights content)\n\nGiven today's guidance ({guidance}), generate {seeds_per_run} specific marketing/outreach tasks. Examples:\n- Draft a know-your-rights blog post about CO tow fee caps\n- Create SEO-optimized landing page content for school zone safety\n- Write a Nextdoor post template for reporting unsafe commercial vehicles\n- Design a community reporting form that's easy to use on mobile\n- Draft a pitch to local news about patterns found in our data\n\nReturn only the tasks, one per line.",
+    "coder_prompt": "You are a marketing and content strategist for a safer-streets initiative.\n\nContext:\n{stewards_map}\n\nTask: {task}\n\nProduce a Python script that:\n1. Generates the marketing/outreach content or tool described\n2. Outputs the result to stdout (HTML, markdown, JSON as appropriate)\n3. Include unittest.TestCase with at least 3 tests validating the output\n4. Focus on practical, actionable content that helps Englewood residents\n\nReturn only the code inside ```python``` markers."
   }
 }

@@ -111,6 +111,8 @@ class ClaudeCodeProvider:
                 cmd = ["claude", "-p"]
                 if model:
                     cmd.extend(["--model", model])
+                # Clear nesting guard so claude CLI works from within a Claude Code session
+                env = {k: v for k, v in os.environ.items() if k not in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT")}
                 with open(prompt_file, "r", encoding="utf-8") as pf:
                     result = subprocess.run(
                         cmd,
@@ -118,6 +120,7 @@ class ClaudeCodeProvider:
                         capture_output=True,
                         text=True,
                         timeout=self.timeout,
+                        env=env,
                     )
 
                 if result.returncode != 0:
@@ -161,9 +164,13 @@ def get_provider(config):
     api_type = config.get("llm_api", "venice")
 
     if api_type == "claude_code":
+        # Only use model if it's a valid Claude model name, not an inherited API model
+        coder_model = config.get("models", {}).get("coder")
+        if coder_model and coder_model not in ("opus", "sonnet", "haiku"):
+            coder_model = None
         return ClaudeCodeProvider(
             timeout=config.get("claude_code_timeout", 300),
-            model=config.get("models", {}).get("coder"),
+            model=coder_model,
         )
 
     # Venice, Grok, or any OpenAI-compatible API

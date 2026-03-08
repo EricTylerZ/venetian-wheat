@@ -19,9 +19,14 @@ class Sower:
         self.llm_api = config.get("llm_api", "venice")
 
         # Model tiering: use models dict if available, fall back to legacy keys
+        # For claude_code, don't inherit API model names — use None (CLI default) if not set
         models = config.get("models", {})
-        self.strategist_model = models.get("strategist", config.get("default_strategist_model", "mistral-31-24b"))
-        self.coder_model = models.get("coder", config.get("default_coder_model", "mistral-31-24b"))
+        if self.llm_api == "claude_code":
+            self.strategist_model = models.get("strategist")
+            self.coder_model = models.get("coder")
+        else:
+            self.strategist_model = models.get("strategist", config.get("default_strategist_model", "mistral-31-24b"))
+            self.coder_model = models.get("coder", config.get("default_coder_model", "mistral-31-24b"))
 
         self.max_tokens = config["max_tokens"]
         self.timeout = config["timeout"]

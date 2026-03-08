@@ -42,6 +42,12 @@ wheat/pause.txt
 wheat/token_log.json
 wheat/__pycache__/
 
+# Intelligence data (generated, not committed)
+intake/
+reports/
+wheat/projects/
+email_config.json
+
 # IDE files
 .vscode/
 .idea/

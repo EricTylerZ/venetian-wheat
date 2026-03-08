@@ -1,0 +1,175 @@
+{
+  "google_reviews_auto": {
+    "name": "Google Reviews — Auto Businesses",
+    "channel_type": "REVIEWS",
+    "sources": [
+      "Google Maps API — auto dealers in Englewood CO",
+      "Google Maps API — auto repair shops in Englewood CO",
+      "Google Maps API — tow companies in Englewood CO",
+      "Google Maps API — tint/exhaust shops in Englewood CO"
+    ],
+    "fields": ["used_car_dealers", "auto_repair", "tow_companies", "exhaust_noise", "window_tint"],
+    "frequency": "daily",
+    "description": "Scrape recent Google reviews for auto businesses, flag negative reviews mentioning fraud, overcharging, damage, illegal practices"
+  },
+  "yelp_bbb_complaints": {
+    "name": "Yelp & BBB — Consumer Complaints",
+    "channel_type": "REVIEWS",
+    "sources": [
+      "Yelp API — auto category in Englewood CO",
+      "BBB complaint search — auto businesses in CO"
+    ],
+    "fields": ["used_car_dealers", "auto_repair", "tow_companies", "dealer_financing"],
+    "frequency": "daily",
+    "description": "Monitor Yelp and BBB for new complaints against auto businesses"
+  },
+  "cfpb_auto_lending": {
+    "name": "CFPB — Auto Lending Complaints",
+    "channel_type": "REGULATORY",
+    "sources": [
+      "https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/ — product=Vehicle loan, state=CO"
+    ],
+    "fields": ["dealer_financing", "auto_insurance"],
+    "frequency": "daily",
+    "description": "Query CFPB complaint database for auto lending complaints in Colorado"
+  },
+  "fmcsa_safer": {
+    "name": "FMCSA SAFER — Carrier Safety",
+    "channel_type": "PUBLIC_RECORDS",
+    "sources": [
+      "https://safer.fmcsa.dot.gov — carriers in Englewood/Arapahoe County",
+      "FMCSA SMS (Safety Measurement System) — inspection results"
+    ],
+    "fields": ["fleet_compliance", "commercial_trucking"],
+    "frequency": "weekly",
+    "description": "Check FMCSA for carrier safety records, violations, and inspection results"
+  },
+  "cdot_crash_data": {
+    "name": "CDOT — Crash & Fatality Data",
+    "channel_type": "PUBLIC_RECORDS",
+    "sources": [
+      "CDOT crash data portal — Englewood/Arapahoe County",
+      "CDOT fatality reports"
+    ],
+    "fields": ["school_zone_safety", "pedestrian_cyclist", "road_intersection_safety", "fleet_compliance"],
+    "frequency": "weekly",
+    "description": "Pull crash data to identify dangerous locations, patterns, and entities involved"
+  },
+  "co_dmv_records": {
+    "name": "Colorado DMV — Registration & Licensing",
+    "channel_type": "PUBLIC_RECORDS",
+    "sources": [
+      "CO DMV dealer license registry",
+      "CO DMV commercial vehicle registration"
+    ],
+    "fields": ["title_registration", "used_car_dealers", "fleet_compliance", "auto_insurance"],
+    "frequency": "weekly",
+    "description": "Check dealer licensing status, commercial vehicle registration, insurance verification"
+  },
+  "co_puc_towing": {
+    "name": "CO PUC — Towing & TNC",
+    "channel_type": "REGULATORY",
+    "sources": [
+      "Colorado PUC tow carrier registration database",
+      "CO PUC TNC compliance records"
+    ],
+    "fields": ["tow_companies", "rideshare_delivery"],
+    "frequency": "weekly",
+    "description": "Check PUC registration status for tow companies and TNC compliance"
+  },
+  "local_news_rss": {
+    "name": "Local News — Englewood/South Denver",
+    "channel_type": "NEWS",
+    "sources": [
+      "Englewood Herald RSS",
+      "Denver Post — Englewood section",
+      "9News — traffic/safety",
+      "CBS4 Denver — consumer reports",
+      "Westword — consumer issues"
+    ],
+    "fields": ["all"],
+    "frequency": "daily",
+    "description": "Monitor local news for automotive safety stories, enforcement actions, consumer complaints"
+  },
+  "city_311": {
+    "name": "Englewood 311 — Service Requests",
+    "channel_type": "PUBLIC_RECORDS",
+    "sources": [
+      "City of Englewood 311 system",
+      "Englewood city council agendas and minutes"
+    ],
+    "fields": ["road_intersection_safety", "pedestrian_cyclist", "exhaust_noise", "school_zone_safety"],
+    "frequency": "weekly",
+    "description": "Track 311 requests related to road safety, noise complaints, signage, and infrastructure"
+  },
+  "community_intake": {
+    "name": "Community Reports — Direct Intake",
+    "channel_type": "COMMUNITY",
+    "sources": [
+      "Web form submissions",
+      "Email intake",
+      "Photo/video submissions"
+    ],
+    "fields": ["all"],
+    "frequency": "realtime",
+    "description": "Direct reports from Englewood residents — the most valuable channel"
+  },
+  "nextdoor_social": {
+    "name": "Nextdoor & Social Media",
+    "channel_type": "SOCIAL",
+    "sources": [
+      "Nextdoor — Englewood neighborhoods",
+      "Reddit r/Englewood, r/Denver",
+      "Local Facebook community groups"
+    ],
+    "fields": ["all"],
+    "frequency": "daily",
+    "description": "Monitor social channels for safety complaints, patterns, and community sentiment"
+  },
+  "court_records": {
+    "name": "Court Records — Arapahoe County",
+    "channel_type": "COURT",
+    "sources": [
+      "Arapahoe County District Court — civil filings",
+      "Arapahoe County Court — small claims",
+      "CO judicial branch case search"
+    ],
+    "fields": ["used_car_dealers", "tow_companies", "dealer_financing", "auto_repair"],
+    "frequency": "weekly",
+    "description": "Monitor court filings for lawsuits involving auto businesses"
+  },
+  "co_ag_consumer": {
+    "name": "CO Attorney General — Consumer Protection",
+    "channel_type": "REGULATORY",
+    "sources": [
+      "CO AG consumer complaint database",
+      "CO AG enforcement actions",
+      "CO Auto Dealer Board disciplinary actions"
+    ],
+    "fields": ["used_car_dealers", "auto_repair", "dealer_financing", "tow_companies"],
+    "frequency": "weekly",
+    "description": "Monitor AG complaints and enforcement actions against auto businesses"
+  },
+  "aircare_emissions": {
+    "name": "AirCare Colorado — Emissions",
+    "channel_type": "PUBLIC_RECORDS",
+    "sources": [
+      "AirCare Colorado emissions testing data",
+      "CDPHE air quality complaints"
+    ],
+    "fields": ["emissions_environmental"],
+    "frequency": "weekly",
+    "description": "Emissions testing failures and air quality complaints"
+  },
+  "shop_social_media": {
+    "name": "Auto Shop Social Media",
+    "channel_type": "SOCIAL",
+    "sources": [
+      "Instagram/TikTok — local auto shops advertising mods",
+      "Facebook pages — exhaust/tint shops in Englewood area"
+    ],
+    "fields": ["exhaust_noise", "window_tint", "emissions_environmental"],
+    "frequency": "daily",
+    "description": "Monitor shops advertising illegal modifications — DPF deletes, illegal tint, muffler deletes"
+  }
+}

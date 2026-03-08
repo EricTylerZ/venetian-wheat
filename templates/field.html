@@ -11,35 +11,52 @@
             --wheat: #d4a843; --soil: #2c1810; --green: #4a7c3f;
             --red: #8b3a3a; --bg: #faf6ee; --card: #fff;
             --border: #e0d5c1; --text: #2c1810; --muted: #7a6e5d;
+            --blue: #3a5f8b;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            font-family: 'Segoe UI', system-ui, sans-serif;
             background: var(--bg); color: var(--text);
             line-height: 1.5; padding: 1.5rem;
             max-width: 1100px; margin: 0 auto;
         }
         a { color: var(--wheat); }
-        h2 { color: var(--soil); margin-bottom: 1rem; font-size: 1.6rem; }
-        h3 { color: var(--soil); margin: 1.5rem 0 0.5rem; font-size: 1.1rem; }
+        h2 { color: var(--soil); margin-bottom: 0.5rem; font-size: 1.5rem; }
+        h3 { color: var(--soil); margin: 0 0 0.5rem; font-size: 1rem; }
+
+        .field-meta { color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem; }
 
         .card {
             background: var(--card); border: 1px solid var(--border);
             border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem;
         }
+
+        .tabs { display: flex; gap: 0; margin-bottom: 0; border-bottom: 2px solid var(--border); }
+        .tab {
+            padding: 0.6rem 1.25rem; cursor: pointer; font-size: 0.9rem;
+            border-bottom: 2px solid transparent; margin-bottom: -2px;
+            color: var(--muted); font-weight: 500;
+        }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--soil); border-bottom-color: var(--wheat); font-weight: 600; }
+        .tab-panel { display: none; padding-top: 1rem; }
+        .tab-panel.active { display: block; }
+
         .controls { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
         .btn {
             display: inline-block; padding: 0.4rem 1rem;
             border: 1px solid var(--border); border-radius: 6px;
             background: var(--card); color: var(--text);
-            cursor: pointer; font-size: 0.85rem; transition: background 0.15s;
-            text-decoration: none;
+            cursor: pointer; font-size: 0.85rem; text-decoration: none;
+            transition: background 0.15s;
         }
         .btn:hover { background: #f0ebe0; }
         .btn-primary { background: var(--wheat); color: var(--soil); border-color: var(--wheat); font-weight: 600; }
         .btn-primary:hover { background: #c99a35; }
+        .btn-scan { background: var(--blue); color: #fff; border-color: var(--blue); }
+        .btn-scan:hover { background: #2d4f75; }
+        .btn-sm { padding: 0.3rem 0.75rem; font-size: 0.8rem; }
         .btn-danger { color: var(--red); border-color: var(--red); }
-        .btn-danger:hover { background: #fdf0f0; }
 
         textarea {
             width: 100%; padding: 0.6rem;
@@ -60,11 +77,11 @@
         th {
             background: var(--soil); color: var(--wheat);
             padding: 0.5rem 0.75rem; text-align: left;
-            font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;
         }
         td {
             padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border);
-            font-size: 0.85rem; vertical-align: top;
+            font-size: 0.82rem; vertical-align: top;
         }
         tr:last-child td { border-bottom: none; }
 
@@ -73,89 +90,227 @@
         .status-growing { color: var(--wheat); font-weight: 600; }
         .status-repairing { color: #b8860b; font-weight: 600; }
 
-        #processingStatus { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.5rem; }
+        .stage-badge {
+            display: inline-block; padding: 0.15rem 0.5rem;
+            border-radius: 10px; font-size: 0.7rem; font-weight: 600;
+        }
+        .stage-seed { background: #f0ebe0; color: var(--muted); }
+        .stage-sprout { background: #e8f4e8; color: var(--green); }
+        .stage-notice { background: #e8e8f4; color: var(--blue); }
+        .stage-virtue { background: #f4e8f4; color: #6a2d6a; }
+        .stage-community { background: #e8f4f4; color: #2d6a6a; }
+        .stage-demand { background: #f4e8e0; color: #6a3d2d; }
+        .stage-civil { background: #f4e0e0; color: var(--red); }
+        .stage-harvest { background: #d4e8d4; color: #1a5a1a; }
 
         .badge {
             display: inline-block; padding: 0.15rem 0.5rem;
-            border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
+            border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
         }
-        .badge-venice { background: #e8f4e8; color: #2d6a2d; }
-        .badge-grok { background: #e8e8f4; color: #2d2d6a; }
-        .badge-claude_code { background: #f4e8e0; color: #6a3d2d; }
+        .badge-active { background: #e8f4e8; color: #2d6a2d; }
 
-        .model-info { font-size: 0.8rem; color: var(--muted); margin-bottom: 1rem; }
+        .law-tag {
+            display: inline-block; background: #f0ebe0; color: var(--soil);
+            padding: 0.15rem 0.5rem; border-radius: 3px;
+            font-size: 0.75rem; margin: 0.15rem;
+        }
+
+        .channel-tag {
+            display: inline-block; background: #e8e8f4; color: var(--blue);
+            padding: 0.15rem 0.5rem; border-radius: 3px;
+            font-size: 0.75rem; margin: 0.15rem;
+        }
+
+        .toast {
+            position: fixed; bottom: 1.5rem; right: 1.5rem;
+            background: var(--soil); color: #e8dcc8; padding: 0.75rem 1.25rem;
+            border-radius: 8px; font-size: 0.85rem; z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            transform: translateY(100px); opacity: 0;
+            transition: transform 0.3s, opacity 0.3s;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
     </style>
 </head>
 <body>
     <p><a href="/">&larr; Dashboard</a></p>
     <h2>{{ project_name }}
-        <span class="badge badge-{{ config.llm_api }}">{{ config.llm_api }}</span>
-        {% if active %}<span class="badge" style="background:#e8f4e8;color:#2d6a2d;">tending</span>{% endif %}
+        {% if active %}<span class="badge badge-active">tending</span>{% endif %}
     </h2>
-    {% if config.models %}
-    <div class="model-info">
-        Strategist: <strong>{{ config.models.get("strategist", "default") }}</strong> /
-        Coder: <strong>{{ config.models.get("coder", "default") }}</strong> /
-        Rescuer: <strong>{{ config.models.get("rescuer", "default") }}</strong>
+    <div class="field-meta">
+        {{ field_config.description or '' }}<br>
+        Jurisdiction: {{ field_config.jurisdiction or 'Englewood, CO' }}
     </div>
-    {% endif %}
 
-    <div class="card">
-        <form id="sowForm" onsubmit="sowSeeds(event)">
-            <textarea name="guidance" rows="3"
-                placeholder="Sow guidance for this client — leave blank for AI to propose"></textarea>
-            <div class="controls">
-                <button type="submit" class="btn btn-primary">Sow Seeds</button>
-                <button type="button" class="btn" onclick="fetch('/projects/{{ project_id }}/pause')">Pause</button>
-                <button type="button" class="btn" onclick="fetch('/projects/{{ project_id }}/resume')">Resume</button>
-                <button type="button" class="btn" onclick="showSuccess()">Successful Seeds</button>
-                <button type="button" class="btn" onclick="integrateSeeds()">Integrate Seeds</button>
-                <button type="button" class="btn btn-danger" onclick="if(confirm('Clear all experiments?')) fetch('/projects/{{ project_id }}/clear')">Clear</button>
+    <!-- Laws & Channels summary -->
+    <div class="card" style="padding: 0.75rem 1rem;">
+        <div style="margin-bottom:0.5rem;">
+            <strong style="font-size:0.8rem;">Laws:</strong>
+            {% for law in field_config.laws or [] %}
+            <span class="law-tag">{{ law }}</span>
+            {% endfor %}
+            {% if not field_config.laws %}<span style="color:var(--muted); font-size:0.8rem;">None configured</span>{% endif %}
+        </div>
+        <div>
+            <strong style="font-size:0.8rem;">Channels:</strong>
+            {% for ch_id, ch in field_channels.items() %}
+            <span class="channel-tag">{{ ch.name }}</span>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('scan')">Scan & Analyze</div>
+        <div class="tab" onclick="switchTab('cases')">Cases ({{ field_cases | length }})</div>
+        <div class="tab" onclick="switchTab('seeds')">Seeds</div>
+        <div class="tab" onclick="switchTab('config')">Config</div>
+    </div>
+
+    <!-- Scan & Analyze Tab -->
+    <div id="tab-scan" class="tab-panel active">
+        <div class="card">
+            <form id="sowForm" onsubmit="sowSeeds(event)">
+                <textarea name="guidance" rows="3"
+                    placeholder="Intelligence guidance — what should the analyst focus on today?"></textarea>
+                <div class="controls">
+                    <button type="submit" class="btn btn-primary">Run Analysis</button>
+                    <button type="button" class="btn btn-scan" onclick="scanFieldChannels()">Scan Channels</button>
+                    <button type="button" class="btn" onclick="fetch('/projects/{{ project_id }}/pause').then(()=>toast('Paused'))">Pause</button>
+                    <button type="button" class="btn" onclick="fetch('/projects/{{ project_id }}/resume').then(()=>toast('Resumed'))">Resume</button>
+                </div>
+            </form>
+        </div>
+
+        <div hx-ext="sse" sse-connect="/projects/{{ project_id }}/stream" sse-swap="message" hx-swap="innerHTML">
+            {% include 'partials/field_status.html' %}
+        </div>
+    </div>
+
+    <!-- Cases Tab -->
+    <div id="tab-cases" class="tab-panel">
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                <h3>Active Cases — {{ project_name }}</h3>
+                <button class="btn btn-sm" onclick="location.reload()">Refresh</button>
             </div>
-        </form>
+            <table>
+                <tr><th>#</th><th>Entity</th><th>Issue</th><th>Severity</th><th>Stage</th><th>Since</th><th>Actions</th></tr>
+                {% for case in field_cases %}
+                <tr>
+                    <td>{{ case.id }}</td>
+                    <td><strong>{{ case.entity }}</strong></td>
+                    <td>{{ case.issue[:100] }}</td>
+                    <td>{{ case.severity }}</td>
+                    <td><span class="stage-badge stage-{{ case.stage }}">{{ case.stage }}</span></td>
+                    <td>{{ case.stage_entered_at[:10] if case.stage_entered_at else '' }}</td>
+                    <td>
+                        {% if case.stage != 'harvest' %}
+                        <button class="btn btn-sm" onclick="escalateCase({{ case.id }})">Escalate</button>
+                        <button class="btn btn-sm" onclick="resolveCase({{ case.id }})">Resolve</button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not field_cases %}
+                <tr><td colspan="7" style="text-align:center; color:var(--muted);">No cases yet for this field.</td></tr>
+                {% endif %}
+            </table>
+        </div>
     </div>
 
-    <div hx-ext="sse" sse-connect="/projects/{{ project_id }}/stream" sse-swap="message" hx-swap="innerHTML">
-        {% include 'partials/field_status.html' %}
+    <!-- Seeds Tab -->
+    <div id="tab-seeds" class="tab-panel">
+        <div class="card">
+            <div class="controls">
+                <button class="btn btn-sm" onclick="showSuccess()">Successful Seeds</button>
+                <button class="btn btn-sm" onclick="integrateSeeds()">Integrate</button>
+                <button class="btn btn-sm btn-danger" onclick="if(confirm('Clear all seeds?')) fetch('/projects/{{ project_id }}/clear').then(()=>toast('Cleared'))">Clear</button>
+            </div>
+            {% include 'partials/field_status.html' %}
+        </div>
     </div>
 
-    <details class="card">
-        <summary><h3 style="display:inline">Project Config</h3></summary>
-        <form id="configForm" onsubmit="updateConfig(event)">
-            <textarea name="config" rows="10">{{ config_json }}</textarea>
-            <button type="submit" class="btn">Update Config</button>
-        </form>
-    </details>
+    <!-- Config Tab -->
+    <div id="tab-config" class="tab-panel">
+        <div class="card">
+            <form id="configForm" onsubmit="updateConfig(event)">
+                <textarea name="config" rows="15" style="font-family:monospace; font-size:0.8rem;">{{ config_json }}</textarea>
+                <button type="submit" class="btn btn-primary">Update Config</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
 
     <script>
         const PID = '{{ project_id }}';
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.getElementById('tab-' + tab).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function toast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 4000);
+        }
+
         function sowSeeds(event) {
             event.preventDefault();
             const guidance = event.target.querySelector('textarea').value.trim();
+            toast('Running analysis...');
             fetch(`/projects/${PID}/sow`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({guidance: guidance || null})
-            }).then(r => r.json()).then(d => alert(d.message));
+            }).then(r => r.json()).then(d => toast(d.message));
         }
+
+        function scanFieldChannels() {
+            toast('Scanning channels for ' + PID + '...');
+            fetch(`/api/grok-scan?field=${PID}`, {method: 'POST'})
+                .then(r => r.json())
+                .then(d => toast(d.message));
+        }
+
         function showSuccess() {
             fetch(`/projects/${PID}/success`).then(r => r.json()).then(d => alert(d.successful_seeds));
         }
         function integrateSeeds() {
             fetch(`/projects/${PID}/integrate`, {method: 'POST', headers: {'Content-Type': 'application/json'}})
-                .then(r => r.json()).then(d => alert(d.message));
+                .then(r => r.json()).then(d => toast(d.message));
         }
         function updateConfig(event) {
             event.preventDefault();
             const config = event.target.querySelector('textarea').value;
             try {
-                const parsed = JSON.parse(config);
+                JSON.parse(config);
                 fetch(`/projects/${PID}/config`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: config
-                }).then(r => r.json()).then(d => alert(d.message));
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: config
+                }).then(r => r.json()).then(d => toast(d.message));
             } catch(e) { alert('Invalid JSON: ' + e.message); }
+        }
+
+        function escalateCase(caseId) {
+            const reason = prompt('Reason for escalation:');
+            if (reason === null) return;
+            fetch('/api/cases/' + caseId + '/escalate', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({reason: reason})
+            }).then(r => r.json()).then(d => { toast(d.message); location.reload(); });
+        }
+        function resolveCase(caseId) {
+            const resolution = prompt('Resolution:', 'Compliance achieved');
+            if (resolution === null) return;
+            fetch('/api/cases/' + caseId + '/resolve', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({resolution: resolution})
+            }).then(r => r.json()).then(d => { toast(d.message); location.reload(); });
         }
     </script>
 </body>
