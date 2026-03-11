@@ -237,6 +237,16 @@ def dashboard():
             with open(os.path.join(BRIEFINGS_DIR, briefing_files[0]), "r") as f:
                 latest_briefing = f.read()
 
+    # Today's community reports
+    intake_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "intake")
+    today_intake = 0
+    today_str = date.today().strftime("%Y%m%d")
+    if os.path.exists(intake_dir):
+        today_intake = sum(
+            1 for f in os.listdir(intake_dir)
+            if f.startswith("report_") and f.endswith(".json") and today_str in f
+        )
+
     return render_template(
         "dashboard.html",
         fields=field_list,
@@ -246,6 +256,7 @@ def dashboard():
         escalation_ready=len(escalation_ready_cases),
         cross_field_entities=cross_field,
         latest_briefing=latest_briefing,
+        today_intake=today_intake,
     )
 
 
@@ -475,31 +486,103 @@ def get_models():
 # API Routes: Intelligence Operations
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Daily cycle — run with live log streaming
+# ---------------------------------------------------------------------------
+
+CYCLE_LOG_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "reports", "cycle_logs")
+_cycle_state = {"running": False, "log_file": None, "started": None, "pid": None}
+
+
 @app.route("/api/daily-cycle", methods=["POST"])
 def api_daily_cycle():
-    """Trigger a full daily cycle in a background thread."""
+    """Trigger a full daily cycle in a background thread with log capture."""
+    if _cycle_state["running"]:
+        return jsonify({"message": "Daily cycle already running.", "status": "running"}), 409
+
+    os.makedirs(CYCLE_LOG_DIR, exist_ok=True)
+    log_file = os.path.join(CYCLE_LOG_DIR, f"cycle_{date.today().isoformat()}.log")
+    _cycle_state["log_file"] = log_file
+    _cycle_state["started"] = datetime.now().isoformat()
+    _cycle_state["running"] = True
+
     def run_cycle():
         import subprocess
-        subprocess.run(
-            ["python", "daily_runner.py"],
-            cwd=os.path.dirname(os.path.realpath(__file__)),
-            capture_output=True, text=True,
-        )
+        try:
+            with open(log_file, "w") as lf:
+                proc = subprocess.Popen(
+                    ["python", "-u", "daily_runner.py"],
+                    cwd=os.path.dirname(os.path.realpath(__file__)),
+                    stdout=lf, stderr=subprocess.STDOUT,
+                    text=True,
+                )
+                _cycle_state["pid"] = proc.pid
+                proc.wait()
+        finally:
+            _cycle_state["running"] = False
+            _cycle_state["pid"] = None
+
     t = threading.Thread(target=run_cycle, daemon=True)
     t.start()
-    return jsonify({"message": "Daily cycle started in background. Check briefing tab for results."})
+    return jsonify({"message": "Daily cycle started. Open the log panel to watch progress.", "status": "started"})
 
 
-@app.route("/api/grok-scan", methods=["POST"])
-def api_grok_scan():
-    """Trigger Grok channel scans."""
+@app.route("/api/daily-cycle/status")
+def api_daily_cycle_status():
+    """Check daily cycle status."""
+    return jsonify({
+        "running": _cycle_state["running"],
+        "started": _cycle_state["started"],
+        "log_file": _cycle_state["log_file"],
+    })
+
+
+@app.route("/api/daily-cycle/stream")
+def api_daily_cycle_stream():
+    """SSE stream of the daily cycle log file."""
+    log_file = _cycle_state["log_file"]
+
+    def event_stream():
+        if not log_file or not os.path.exists(log_file):
+            yield "data: Waiting for cycle to start...\n\n"
+
+        # Wait for file to appear
+        for _ in range(10):
+            if log_file and os.path.exists(log_file):
+                break
+            time.sleep(1)
+            yield "data: .\n\n"
+
+        if not log_file or not os.path.exists(log_file):
+            yield "data: [No log file found]\n\n"
+            return
+
+        with open(log_file, "r") as f:
+            while True:
+                line = f.readline()
+                if line:
+                    # Escape for SSE
+                    escaped = line.rstrip("\n").replace("\n", " ")
+                    yield f"data: {escaped}\n\n"
+                elif not _cycle_state["running"]:
+                    yield "data: \n\ndata: === CYCLE COMPLETE ===\n\n"
+                    return
+                else:
+                    time.sleep(0.5)
+
+    return Response(event_stream(), mimetype="text/event-stream")
+
+
+@app.route("/api/scan", methods=["POST"])
+@app.route("/api/grok-scan", methods=["POST"])  # legacy alias
+def api_scan():
+    """Trigger channel scans (Claude Sonnet)."""
     channel_filter = request.args.get("channel")
     field_filter = request.args.get("field")
 
     def run_scan():
-        from wheat.grok_tasks import run_daily_scans
+        from wheat.scan_tasks import run_daily_scans
         if field_filter:
-            # Scan all channels for a specific field
             field_channels = get_channels_for_field(field_filter)
             for cid in field_channels:
                 run_daily_scans(channel_filter=cid)
@@ -509,7 +592,7 @@ def api_grok_scan():
     t = threading.Thread(target=run_scan, daemon=True)
     t.start()
     target = channel_filter or field_filter or "all channels"
-    return jsonify({"message": f"Grok scan started for {target}."})
+    return jsonify({"message": f"Channel scan started for {target}."})
 
 
 @app.route("/api/briefing")
@@ -590,9 +673,10 @@ def api_intake():
         return jsonify({"message": "Description is required."}), 400
     result = process_intake(data)
     return jsonify({
-        "message": f"Report received and routed to {result['target_field']}. Thank you.",
+        "message": f"Report received — Case #{result['case_id']} created in {result['target_field']}. Thank you.",
         "target_field": result["target_field"],
         "report_file": result["report_file"],
+        "case_id": result["case_id"],
     })
 
 

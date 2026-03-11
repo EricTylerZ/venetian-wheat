@@ -278,6 +278,9 @@ Date: {run_date}
 SCAN RESULTS (Phase 1):
 {scan_summary}
 
+COMMUNITY REPORTS (most valuable source):
+{community_reports}
+
 ANALYST CORRELATION (Phase 1.5):
 {correlation_summary}
 
@@ -348,6 +351,30 @@ def synthesize_briefing(
         )
         scan_summary = f"Scanned {channels_scanned} channels, detected {total_signals} raw signals."
 
+    # Community reports (direct resident intake — most valuable source)
+    community_reports_text = "No community reports received today."
+    intake_dir = os.path.join(PROJECT_ROOT, "intake")
+    if os.path.exists(intake_dir):
+        today_reports = []
+        for fname in sorted(os.listdir(intake_dir)):
+            if fname.startswith("report_") and fname.endswith(".json") and run_date.replace("-", "") in fname:
+                try:
+                    with open(os.path.join(intake_dir, fname), "r") as f:
+                        report = json.load(f)
+                    today_reports.append(report)
+                except (json.JSONDecodeError, IOError):
+                    continue
+        if today_reports:
+            parts = [f"{len(today_reports)} report(s) received today:"]
+            for r in today_reports:
+                entity = r.get("entity", "Unknown")
+                cat = r.get("category", "unknown")
+                sev = r.get("severity", "?")
+                loc = r.get("location", "")
+                desc = r.get("description", "")[:150]
+                parts.append(f"  - Entity: {entity} | Category: {cat} | Severity: {sev} | Location: {loc}\n    {desc}")
+            community_reports_text = "\n".join(parts)
+
     # Correlation summary
     correlation_summary = "No correlation analysis performed."
     if correlation_analysis:
@@ -394,6 +421,7 @@ def synthesize_briefing(
     prompt = BRIEFING_PROMPT.format(
         run_date=run_date,
         scan_summary=scan_summary,
+        community_reports=community_reports_text,
         correlation_summary=correlation_summary,
         field_results=field_results_text,
         escalation_report=escalation_report or "No escalation data.",

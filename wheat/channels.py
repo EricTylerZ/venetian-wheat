@@ -28,6 +28,8 @@ import json
 import os
 from datetime import datetime
 
+from wheat.escalation import create_case, init_escalation_db
+
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 CHANNELS_PATH = os.path.join(PROJECT_ROOT, "channels.json")
 INTAKE_DIR = os.path.join(PROJECT_ROOT, "intake")
@@ -284,7 +286,25 @@ def process_intake(report_data):
     print(f"  Intake received: {report_data.get('description', 'No description')[:80]}")
     print(f"  Routed to field: {target_field}")
 
-    return {"report_file": report_file, "target_field": target_field}
+    # Create escalation case at SEED stage
+    init_escalation_db()
+    entity = report_data.get("entity", "").strip() or "Unknown Entity"
+    description = report_data.get("description", "")
+    severity = int(report_data.get("severity", 1))
+    location = report_data.get("location", "")
+
+    case_issue = f"[{location}] {description}" if location else description
+
+    case_id = create_case(
+        field=target_field,
+        entity=entity,
+        issue=case_issue,
+        severity=severity,
+        source="community_intake",
+        notes=f"Community report received {report_data.get('received_at', '')}",
+    )
+
+    return {"report_file": report_file, "target_field": target_field, "case_id": case_id}
 
 
 def channel_status_report():

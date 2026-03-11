@@ -199,10 +199,14 @@
                 <span class="stat-num">{{ escalation_ready }}</span>
                 ready to escalate
             </div>
+            <div>
+                <span class="stat-num">{{ today_intake }}</span>
+                reports today
+            </div>
         </div>
         <div class="actions">
             <button class="btn btn-scan" onclick="runDailyCycle()">Run Daily Cycle</button>
-            <button class="btn btn-scan" onclick="runGrokScans()">Grok Scan Only</button>
+            <button class="btn btn-scan" onclick="runChannelScans()">Channel Scan Only</button>
             <button class="btn" onclick="generateBriefing()">Generate Briefing</button>
         </div>
     </div>
@@ -214,6 +218,7 @@
         <div class="tab" onclick="switchTab('cases')">Cases ({{ active_cases }})</div>
         <div class="tab" onclick="switchTab('briefing')">Briefing</div>
         <div class="tab" onclick="switchTab('intake')">Submit Report</div>
+        <div class="tab" id="tab-log-btn" onclick="switchTab('log')" style="display:none;">Live Log</div>
     </div>
 
     <!-- Fields Tab -->
@@ -363,6 +368,23 @@
                     <textarea name="description" rows="4" placeholder="What happened? What did you see?"
                         style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:6px; font-family:inherit;"></textarea>
                 </div>
+                <div style="display:flex; gap:0.75rem; margin-bottom:0.75rem;">
+                    <div style="flex:1;">
+                        <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.25rem;">When did this happen?</label>
+                        <input type="date" name="incident_date" id="incident_date"
+                            style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:6px;">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.25rem;">How serious is this?</label>
+                        <select name="severity" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:6px;">
+                            <option value="1">1 — Minor annoyance</option>
+                            <option value="2">2 — Concerning</option>
+                            <option value="3" selected>3 — Significant issue</option>
+                            <option value="4">4 — Serious / Dangerous</option>
+                            <option value="5">5 — Imminent danger</option>
+                        </select>
+                    </div>
+                </div>
                 <div style="margin-bottom:0.75rem;">
                     <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.25rem;">Your Email (optional)</label>
                     <input type="email" name="email" placeholder="For follow-up (not required)"
@@ -371,6 +393,15 @@
                 <button type="submit" class="btn btn-primary">Submit Report</button>
             </form>
         </div>
+    </div>
+
+    <!-- Live Log Tab -->
+    <div id="tab-log" class="tab-panel">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <strong id="log-status">Waiting...</strong>
+            <button class="btn" onclick="closeLog()">Close</button>
+        </div>
+        <pre id="log-output" style="background:#111; color:#0f0; padding:12px; border-radius:6px; height:500px; overflow-y:auto; font-size:13px; line-height:1.4; white-space:pre-wrap;"></pre>
     </div>
 
     <div id="toast" class="toast"></div>
@@ -390,17 +421,72 @@
             setTimeout(() => t.classList.remove('show'), 4000);
         }
 
+        let logEventSource = null;
+
         function runDailyCycle() {
-            toast('Starting daily cycle... this runs all phases.');
             fetch('/api/daily-cycle', {method: 'POST'})
                 .then(r => r.json())
-                .then(d => toast(d.message))
+                .then(d => {
+                    if (d.status === 'running') {
+                        toast('Daily cycle already running — showing log.');
+                    } else {
+                        toast('Daily cycle started.');
+                    }
+                    showLog();
+                })
                 .catch(e => toast('Error: ' + e));
         }
 
-        function runGrokScans() {
-            toast('Starting Grok channel scans...');
-            fetch('/api/grok-scan', {method: 'POST'})
+        function showLog() {
+            // Show the log tab and switch to it
+            document.getElementById('tab-log-btn').style.display = '';
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.getElementById('tab-log').classList.add('active');
+            document.getElementById('tab-log-btn').classList.add('active');
+
+            const output = document.getElementById('log-output');
+            const status = document.getElementById('log-status');
+            output.textContent = '';
+            status.textContent = 'Running...';
+            status.style.color = '#0f0';
+
+            // Close any existing stream
+            if (logEventSource) logEventSource.close();
+
+            logEventSource = new EventSource('/api/daily-cycle/stream');
+            logEventSource.onmessage = function(e) {
+                if (e.data === '=== CYCLE COMPLETE ===') {
+                    status.textContent = 'Complete';
+                    status.style.color = '#4a9';
+                    logEventSource.close();
+                    logEventSource = null;
+                    return;
+                }
+                output.textContent += e.data + '\n';
+                output.scrollTop = output.scrollHeight;
+            };
+            logEventSource.onerror = function() {
+                status.textContent = 'Disconnected';
+                status.style.color = '#a44';
+                logEventSource.close();
+                logEventSource = null;
+            };
+        }
+
+        function closeLog() {
+            if (logEventSource) { logEventSource.close(); logEventSource = null; }
+            document.getElementById('tab-log-btn').style.display = 'none';
+            // Switch back to fields tab
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.getElementById('tab-fields').classList.add('active');
+            document.querySelector('.tab').classList.add('active');
+        }
+
+        function runChannelScans() {
+            toast('Starting channel scans (Sonnet)...');
+            fetch('/api/scan', {method: 'POST'})
                 .then(r => r.json())
                 .then(d => toast(d.message))
                 .catch(e => toast('Error: ' + e));
@@ -408,7 +494,7 @@
 
         function scanChannel(channelId) {
             toast('Scanning ' + channelId + '...');
-            fetch('/api/grok-scan?channel=' + channelId, {method: 'POST'})
+            fetch('/api/scan?channel=' + channelId, {method: 'POST'})
                 .then(r => r.json())
                 .then(d => toast(d.message))
                 .catch(e => toast('Error: ' + e));
@@ -448,6 +534,9 @@
             }).then(r => r.json()).then(d => { toast(d.message); location.reload(); });
         }
 
+        // Default incident date to today
+        document.getElementById('incident_date').valueAsDate = new Date();
+
         function submitReport(e) {
             e.preventDefault();
             const form = e.target;
@@ -456,16 +545,25 @@
                 location: form.location.value,
                 entity: form.entity.value,
                 description: form.description.value,
+                incident_date: form.incident_date.value,
+                severity: parseInt(form.severity.value),
                 email: form.email.value,
             };
             fetch('/api/intake', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(data)
-            }).then(r => r.json()).then(d => {
+            })
+            .then(r => {
+                if (!r.ok) return r.json().then(d => { throw new Error(d.message); });
+                return r.json();
+            })
+            .then(d => {
                 toast(d.message);
                 form.reset();
-            });
+                document.getElementById('incident_date').valueAsDate = new Date();
+            })
+            .catch(err => toast('Error: ' + err.message));
         }
     </script>
 </body>
