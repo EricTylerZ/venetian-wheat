@@ -1,5 +1,7 @@
 # Venetian Wheat — Automotive Accountability Intelligence Platform
 
+> **Ecosystem role:** Fish + Bird + Livestock hybrid (scanning → analysis → trained escalation). See [`../zoseco-auto-agent/DOMINION.md`](../zoseco-auto-agent/DOMINION.md) for Eric Zosso's agent ecosystem architecture.
+
 ## What is this?
 An intelligence collection and civil escalation platform focused on automotive
 safety and compliance in Englewood, Colorado. Uses AI agents to monitor 16
