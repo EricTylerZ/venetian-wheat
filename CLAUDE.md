@@ -34,11 +34,17 @@ Reusable data ingestion pipelines that feed multiple fields:
 
 ### Daily Cycle (Mon-Sat, no Sunday)
 ```
-PHASE 1: GROK SCANS    — Grok agents scan channels for new signals
-PHASE 2: FIELD ANALYSIS — Claude Code agents analyze signals per field
-PHASE 3: CORRELATION    — Cross-field entity detection + escalation check
-PHASE 4: BRIEFING       — Daily intelligence report (text + JSON + email)
+PHASE 1: CHANNEL SCANS  — Claude Sonnet scans channels for new signals (web-enabled, lower cost)
+PHASE 2: FIELD ANALYSIS  — Claude Opus agents analyze signals per field (deep analysis)
+PHASE 3: CORRELATION     — Cross-field entity detection + escalation check
+PHASE 4: BRIEFING        — Daily intelligence report (text + JSON + email)
 ```
+
+### LLM Strategy
+All work runs through Claude Code Pro Max subscription (no API keys needed):
+- **Scanning (Phase 1):** `--model sonnet` — web-enabled, cost-effective for broad channel sweeps
+- **Analysis (Phase 2):** Default Opus — deep reasoning for field analysis and escalation
+- **Framework supports** Venice/Grok/OpenAI-compatible APIs via `APIProvider` for future use
 
 ### Escalation Engine (Subsidiarity)
 ```
@@ -52,11 +58,11 @@ Cannot skip stages unless severity >= 5 (imminent danger).
 - `channels.json` — 15 data channel definitions
 - `wheat/channels.py` — Channel pipeline logic
 - `wheat/escalation.py` — Subsidiarity escalation engine + case tracking
-- `wheat/grok_tasks.py` — Grok API daily scanning tasks
+- `wheat/scan_tasks.py` — Channel scanning via Claude Sonnet (replaced grok_tasks.py)
 - `wheat/field_manager.py` — Field analysis orchestration
 - `wheat/sower.py` — Task generation (strategist phase)
 - `wheat/wheat_seed.py` — Seed execution (analyst phase)
-- `wheat/providers.py` — LLM provider abstraction (Venice, Grok, Claude Code)
+- `wheat/providers.py` — LLM provider abstraction (Claude Code active; Venice/Grok preserved for future)
 - `wheat/templates/` — Notice templates (first contact, demand letter, intake form)
 - `app.py` — Flask web UI for field management
 - `reports/briefings/` — Daily briefing output
@@ -71,8 +77,8 @@ python daily_runner.py --field fleet_compliance  # Single field
 python daily_runner.py --report-only      # Briefing from existing data
 python daily_runner.py --email            # Include email delivery
 python daily_runner.py --channels         # Show channel status
-python -m wheat.grok_tasks --list         # List all channels
-python -m wheat.grok_tasks --dry-run      # Preview Grok scans
+python -m wheat.scan_tasks --list          # List all channels
+python -m wheat.scan_tasks --dry-run      # Preview scans
 ```
 
 ## Rules

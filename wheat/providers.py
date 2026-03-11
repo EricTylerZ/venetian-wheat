@@ -1,8 +1,11 @@
 # wheat/providers.py
 """
 LLM provider abstraction. Supports:
-  - "venice" / "grok": OpenAI-compatible chat completions APIs (requires API key)
   - "claude_code": Claude Code CLI (uses Pro Max subscription, no API fees)
+  - "venice" / "grok" / OpenAI-compatible APIs: NOT currently in use, but the
+    APIProvider class is preserved so the framework can accept different LLMs
+    in the future. Right now all work runs through Claude Code Pro Max with
+    model override (e.g. --model sonnet for scanning, opus for deep analysis).
 
 Each provider implements generate(prompt, model, max_tokens) -> (text, usage_dict)
 """

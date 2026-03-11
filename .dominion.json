@@ -1,0 +1,12 @@
+{
+  "creature_type": "hybrid",
+  "label": "Fish + Bird + Livestock",
+  "icon": "🌾",
+  "stewardship_score": 7,
+  "sabbath": {
+    "enforced": true,
+    "note": "No Sunday runs (Mon-Sat cron)"
+  },
+  "wild_things": ["Grok API", "Venice AI", "CFPB", "CO AG", "PUC", "FMCSA", "CDOT"],
+  "dominion_notes": "Transitions between creature types across daily cycle. Phase 1 (channels) = Fish. Phases 2-3 (Sower→WheatSeed→Reaper) = Bird. Escalation engine (SEED→HARVEST) = Livestock — crown jewel of the ecosystem. Subsidiarity is the master principle."
+}

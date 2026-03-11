@@ -8,9 +8,9 @@ Runs each field's intelligence cycle:
 Respects the Sabbath: no runs on Sunday.
 
 Full daily cycle:
-  1. GROK SCAN  — Grok agents scan channels (reviews, news, social, records)
+  1. SCAN       — Claude Sonnet scans channels (reviews, news, social, records)
   2. INGEST     — Route scan results to appropriate fields
-  3. ANALYZE    — Claude Code agents analyze signals per field
+  3. ANALYZE    — Claude Opus agents analyze signals per field
   4. CORRELATE  — Cross-field entity correlation
   5. ESCALATE   — Check cases ready for escalation
   6. BRIEF      — Generate daily intelligence briefing
@@ -43,7 +43,7 @@ from wheat.paths import load_projects, load_project_config, DB_PATH
 from wheat.field_manager import FieldManager
 from wheat.channels import load_channels, get_channels_for_field, channel_status_report
 from wheat.escalation import daily_escalation_check, get_cross_field_entities, init_escalation_db
-from wheat.grok_tasks import run_daily_scans, aggregate_scan_results
+from wheat.scan_tasks import run_daily_scans, aggregate_scan_results
 from tools.stewards_map import get_stewards_map, get_map_as_string
 
 REPORTS_DIR = os.path.join(PROJECT_ROOT, "reports")
@@ -354,7 +354,7 @@ def main():
     if args.dry_run:
         print(f"\nDRY RUN — Full daily cycle preview\n")
 
-        print(f"PHASE 1: GROK SCANS")
+        print(f"PHASE 1: CHANNEL SCANS (Sonnet)")
         channels = load_channels()
         daily_channels = {cid: c for cid, c in channels.items() if c.get("frequency") == "daily"}
         weekly_channels = {cid: c for cid, c in channels.items() if c.get("frequency") == "weekly"}
@@ -394,11 +394,11 @@ def main():
     print(f"  Fields: {len(automotive_fields)} | Channels: {len(load_channels())}")
     print(f"{'#'*60}")
 
-    # ----- PHASE 1: GROK SCANS -----
+    # ----- PHASE 1: CHANNEL SCANS (Sonnet) -----
     scan_results = {}
     if not args.analyze_only:
         print(f"\n{'='*60}")
-        print(f"  PHASE 1: GROK CHANNEL SCANS")
+        print(f"  PHASE 1: CHANNEL SCANS (Claude Sonnet)")
         print(f"{'='*60}")
         scan_results = run_daily_scans(dry_run=False)
         scan_summary, signals_by_field = aggregate_scan_results(scan_results)
