@@ -33,11 +33,7 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# 2. API keys (optional — the dashboard works without them)
-cp .env.example .env
-nano .env   # Add XAI_API_KEY for Grok scans, VENICE_API_KEY for Venice
-
-# Claude Code agent auth (if using claude_code provider):
+# 2. Claude Code auth (required — all LLM work runs through Claude Code Pro Max)
 npm install -g @anthropic-ai/claude-code
 claude   # Follow auth prompts, then exit
 
@@ -54,18 +50,18 @@ That's it. The database initializes automatically on first run.
 - **Fields tab** — All 17 accountability fields. Click any field to scan it,
   view its cases, or run analysis.
 - **Channels tab** — All 15 data channels. Click "Scan Now" on any channel
-  to run a Grok scan.
+  to run a scan.
 - **Cases tab** — All active cases across fields, with escalation controls.
   Escalate or resolve cases right from the table.
 - **Briefing tab** — Daily intelligence briefing. Click "Generate Briefing"
   to create one from current data.
 - **Submit Report tab** — Community intake form. Anyone can submit a concern
-  and it routes to the right field automatically.
+  and it routes to the right field, creates an escalation case automatically.
 
 ### Top-level buttons
 
-- **Run Daily Cycle** — Full 4-phase cycle (Grok scan → analysis → correlation → briefing)
-- **Grok Scan Only** — Just scan channels for new signals
+- **Run Daily Cycle** — Full cycle (Sonnet scan → Opus correlation → field analysis → briefing) with live log
+- **Channel Scan Only** — Just scan channels for new signals (Sonnet)
 - **Generate Briefing** — Create briefing from existing data
 
 ### Set up daily automation (optional)
@@ -128,19 +124,19 @@ CHANNELS (15 pipelines)          FIELDS (17 agents)
 │ Community Reports│───────┘    ┌──────▼───────────┐
 └─────────────────┘             │ seed → sprout →  │
                                 │ notice → virtue →│
-  GROK (daily scan)             │ community →      │
+  SONNET (daily scan)            │ community →      │
   ──or──                        │ demand → civil → │
-  MANUAL (copy-paste)           │ harvest          │
+  COMMUNITY (web form)          │ harvest          │
                                 └──────────────────┘
 ```
 
 ### Daily Cycle (Mon-Sat)
 
-1. **GROK SCAN** — Grok agents scan channels (reviews, news, social, records)
-2. **INGEST** — Route scan results to appropriate fields
-3. **ANALYZE** — Claude Code agents analyze signals per field
-4. **CORRELATE** — Cross-field entity detection + escalation check
-5. **BRIEF** — Daily intelligence report (text + JSON + email)
+1. **SCAN** — Claude Sonnet scans channels (reviews, news, social, records)
+1.5. **CORRELATE** — Claude Opus deduplicates, cross-references, enriches signals
+2. **ANALYZE** — Claude Opus field agents analyze enriched signals
+3. **ESCALATE** — Cross-field entity detection + escalation check
+4. **BRIEF** — Claude Opus writes intelligence narrative (text + JSON + email)
 
 ### Escalation (Subsidiarity)
 
@@ -164,10 +160,10 @@ CHANNELS (15 pipelines)          FIELDS (17 agents)
 | `channels.json` | 15 data channel definitions |
 | `wheat/channels.py` | Channel routing and intake logic |
 | `wheat/escalation.py` | Case tracking and escalation engine |
-| `wheat/grok_tasks.py` | Automated Grok scanning |
-| `wheat/manual_scan.py` | Copy-paste interface (no API needed) |
+| `wheat/scan_tasks.py` | Channel scanning (Claude Sonnet) |
+| `wheat/analyst.py` | Analyst brain: correlation + briefing synthesis |
 | `wheat/field_manager.py` | Field analysis orchestration |
-| `wheat/providers.py` | LLM provider abstraction |
+| `wheat/providers.py` | LLM provider abstraction (Claude Code active) |
 | `wheat/templates/` | Notice and demand letter templates |
 | `app.py` | Flask web dashboard |
 

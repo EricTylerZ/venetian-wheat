@@ -73,7 +73,7 @@ Cannot skip stages unless severity >= 5 (imminent danger).
 ```
 python daily_runner.py                    # Full daily cycle
 python daily_runner.py --dry-run          # Preview what would run
-python daily_runner.py --scan-only        # Grok scans only
+python daily_runner.py --scan-only        # Channel scans only (Sonnet)
 python daily_runner.py --analyze-only     # Claude analysis only
 python daily_runner.py --field fleet_compliance  # Single field
 python daily_runner.py --report-only      # Briefing from existing data
