@@ -34,10 +34,11 @@ Reusable data ingestion pipelines that feed multiple fields:
 
 ### Daily Cycle (Mon-Sat, no Sunday)
 ```
-PHASE 1: CHANNEL SCANS  — Claude Sonnet scans channels for new signals (web-enabled, lower cost)
-PHASE 2: FIELD ANALYSIS  — Claude Opus agents analyze signals per field (deep analysis)
-PHASE 3: CORRELATION     — Cross-field entity detection + escalation check
-PHASE 4: BRIEFING        — Daily intelligence report (text + JSON + email)
+PHASE 1:   CHANNEL SCANS  — Claude Sonnet scans channels for new signals (web-enabled, lower cost)
+PHASE 1.5: CORRELATION    — Opus analyst brain deduplicates, cross-references, enriches signals
+PHASE 2:   FIELD ANALYSIS — Claude Opus agents analyze enriched signals per field
+PHASE 3:   ESCALATION     — Cross-field entity detection + escalation check
+PHASE 4:   BRIEFING       — Opus analyst writes intelligence narrative (text + JSON + email)
 ```
 
 ### LLM Strategy
@@ -59,6 +60,7 @@ Cannot skip stages unless severity >= 5 (imminent danger).
 - `wheat/channels.py` — Channel pipeline logic
 - `wheat/escalation.py` — Subsidiarity escalation engine + case tracking
 - `wheat/scan_tasks.py` — Channel scanning via Claude Sonnet (replaced grok_tasks.py)
+- `wheat/analyst.py` — Analyst brain: scan correlation (Phase 1.5) + briefing synthesis (Phase 4)
 - `wheat/field_manager.py` — Field analysis orchestration
 - `wheat/sower.py` — Task generation (strategist phase)
 - `wheat/wheat_seed.py` — Seed execution (analyst phase)

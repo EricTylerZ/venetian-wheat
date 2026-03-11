@@ -19,7 +19,7 @@ Full daily cycle:
 Usage:
   python daily_runner.py                    # Full daily cycle
   python daily_runner.py --field fleet_compliance  # Run one field
-  python daily_runner.py --scan-only        # Only run Grok scans
+  python daily_runner.py --scan-only        # Only run channel scans
   python daily_runner.py --analyze-only     # Only run Claude analysis
   python daily_runner.py --dry-run          # Show what would run
   python daily_runner.py --report-only      # Generate briefing from existing data
@@ -44,6 +44,7 @@ from wheat.field_manager import FieldManager
 from wheat.channels import load_channels, get_channels_for_field, channel_status_report
 from wheat.escalation import daily_escalation_check, get_cross_field_entities, init_escalation_db
 from wheat.scan_tasks import run_daily_scans, aggregate_scan_results
+from wheat.analyst import correlate_scans, build_field_guidance, synthesize_briefing
 from tools.stewards_map import get_stewards_map, get_map_as_string
 
 REPORTS_DIR = os.path.join(PROJECT_ROOT, "reports")
@@ -182,7 +183,7 @@ def generate_briefing(results, run_date=None, scan_results=None, escalation_repo
             if r and isinstance(r.get("signals"), list)
         )
         scan_summary = f"""
-GROK CHANNEL SCANS
+CHANNEL SCANS (Sonnet)
   Channels scanned: {channels_scanned}
   Signals detected: {total_scan_signals}
 """
@@ -310,7 +311,7 @@ def main():
     parser = argparse.ArgumentParser(description="Daily Field Runner — Automotive Accountability Intelligence")
     parser.add_argument("--field", help="Run a specific field only")
     parser.add_argument("--dry-run", action="store_true", help="Show what would run without running")
-    parser.add_argument("--scan-only", action="store_true", help="Only run Grok channel scans")
+    parser.add_argument("--scan-only", action="store_true", help="Only run channel scans (Sonnet)")
     parser.add_argument("--analyze-only", action="store_true", help="Only run Claude field analysis")
     parser.add_argument("--report-only", action="store_true", help="Generate briefing from existing data")
     parser.add_argument("--email", action="store_true", help="Email the daily briefing")
@@ -408,6 +409,14 @@ def main():
         print("Scan-only mode — skipping field analysis.")
         sys.exit(0)
 
+    # ----- PHASE 1.5: ANALYST CORRELATION (Opus) -----
+    correlation_analysis = None
+    if scan_results:
+        print(f"\n{'='*60}")
+        print(f"  PHASE 1.5: ANALYST CORRELATION (Claude Opus)")
+        print(f"{'='*60}")
+        correlation_analysis, _ = correlate_scans(scan_results)
+
     # ----- PHASE 2: FIELD ANALYSIS -----
     print(f"\n{'='*60}")
     print(f"  PHASE 2: FIELD ANALYSIS (Claude Code Agents)")
@@ -416,25 +425,15 @@ def main():
     # Initialize stewards map once
     get_stewards_map(include_params=True, include_descriptions=True)
 
-    # Build guidance that includes scan results for each field
     results = {}
     for pid, pdata in automotive_fields.items():
-        # Enrich guidance with Grok scan results for this field
-        field_guidance = args.guidance or "Daily scan — check sources for new signals."
-
-        # Check if we have Grok scan data for this field
-        if scan_results:
-            field_scan_data = []
-            for cid, scan in scan_results.items():
-                if scan and pid in scan.get("target_fields", []):
-                    signals = scan.get("signals", [])
-                    if isinstance(signals, list) and signals:
-                        field_scan_data.extend(signals)
-            if field_scan_data:
-                field_guidance += f"\n\nGrok scan found {len(field_scan_data)} signals for this field today:\n"
-                for sig in field_scan_data[:5]:  # Top 5 signals
-                    if isinstance(sig, dict):
-                        field_guidance += f"- {json.dumps(sig)[:200]}\n"
+        # Build enriched guidance from analyst correlation (or fallback)
+        if args.guidance:
+            field_guidance = args.guidance
+        elif correlation_analysis:
+            field_guidance = build_field_guidance(pid, correlation_analysis)
+        else:
+            field_guidance = "Daily scan — check sources for new signals, review existing cases for escalation readiness."
 
         try:
             results[pid] = run_field(pid, pdata, guidance=field_guidance)
@@ -456,8 +455,17 @@ def main():
         for entity in cross_field:
             print(f"    {entity['entity']}: flagged in {entity['field_count']} fields — AUTO-ESCALATION CANDIDATE")
 
-    # ----- PHASE 4: BRIEFING -----
-    briefing_text, briefing_file = generate_briefing(results, scan_results=scan_results, escalation_report=escalation_report)
+    # ----- PHASE 4: BRIEFING (Analyst Synthesis) -----
+    print(f"\n{'='*60}")
+    print(f"  PHASE 4: INTELLIGENCE BRIEFING (Claude Opus)")
+    print(f"{'='*60}")
+    briefing_text, briefing_file = synthesize_briefing(
+        scan_results=scan_results,
+        correlation_analysis=correlation_analysis,
+        field_results=results,
+        escalation_report=escalation_report,
+        cross_field_entities=cross_field,
+    )
     if args.email:
         send_email_briefing(briefing_text, briefing_file)
 
