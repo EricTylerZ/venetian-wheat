@@ -112,17 +112,14 @@ def run_field(project_id, config, guidance=None):
         seeds_per_run=merged_config["seeds_per_run"],
         guidance=guidance,
     )
-    coder_prompt_template = merged_config["coder_prompt"].format(
-        stewards_map=stewards_map_str,
-        file_contents=stewards_map_str,
-        task="{task}",
-    )
-
+    # Pass raw coder_prompt — field_manager.py handles formatting
+    # (pre-formatting here would unescape JSON braces like {{"field"}} → {"field"}
+    # which then breaks on the second .format() call in field_manager)
     manager = FieldManager(project_id=project_id, config=merged_config)
     manager.sow_field(
         guidance,
         strategist_prompt=strategist_prompt,
-        coder_prompt=coder_prompt_template,
+        coder_prompt=merged_config["coder_prompt"],
     )
 
     # Run tend_field in a thread with a timeout
