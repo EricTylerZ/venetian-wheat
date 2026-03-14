@@ -59,7 +59,7 @@ Cannot skip stages unless severity >= 5 (imminent danger).
 - `channels.json` — 15 data channel definitions
 - `wheat/channels.py` — Channel pipeline logic
 - `wheat/escalation.py` — Subsidiarity escalation engine + case tracking
-- `wheat/scan_tasks.py` — Channel scanning via Claude Sonnet (replaced grok_tasks.py)
+- `wheat/scan_tasks.py` — Channel scanning via Claude Sonnet
 - `wheat/analyst.py` — Analyst brain: scan correlation (Phase 1.5) + briefing synthesis (Phase 4)
 - `wheat/field_manager.py` — Field analysis orchestration
 - `wheat/sower.py` — Task generation (strategist phase)

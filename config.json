@@ -1,5 +1,5 @@
 {
-  "llm_api": "venice",
+  "llm_api": "claude_code",
   "venice_api_url": "https://api.venice.ai/api/v1/chat/completions",
   "venice_models_url": "https://api.venice.ai/api/v1/models",
   "grok_api_url": "https://api.xai.com/grok/v1/chat",

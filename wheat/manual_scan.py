@@ -28,7 +28,7 @@ sys.path.insert(0, PROJECT_ROOT)
 
 from wheat.channels import load_channels, get_channels_for_field
 from wheat.paths import load_projects, load_project_config
-from wheat.grok_tasks import CHANNEL_PROMPTS
+from wheat.scan_tasks import CHANNEL_PROMPTS
 
 INTAKE_DIR = os.path.join(PROJECT_ROOT, "intake")
 MANUAL_DIR = os.path.join(INTAKE_DIR, "manual_scans")

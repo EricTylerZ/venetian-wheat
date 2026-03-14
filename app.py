@@ -331,14 +331,15 @@ def project_sow(project_id):
 @app.route("/projects/<project_id>/stream")
 def project_stream(project_id):
     def event_stream():
-        while True:
-            log, status_data = get_latest_run(project_id)
-            log = log or "Field not yet sowed."
-            status = status_data["seeds"] if status_data else {}
-            html = render_template("partials/field_status.html", log=log, status=status)
-            escaped = html.replace("\n", "\ndata: ")
-            yield f"data: {escaped}\n\n"
-            time.sleep(1)
+        with app.app_context():
+            while True:
+                log, status_data = get_latest_run(project_id)
+                log = log or "Field not yet sowed."
+                status = status_data["seeds"] if status_data else {}
+                html = render_template("partials/field_status.html", log=log, status=status)
+                escaped = html.replace("\n", "\ndata: ")
+                yield f"data: {escaped}\n\n"
+                time.sleep(1)
     return Response(event_stream(), mimetype="text/event-stream")
 
 

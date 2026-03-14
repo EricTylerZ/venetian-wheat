@@ -21,6 +21,8 @@ from datetime import datetime
 
 # Resolve claude CLI path at import time so it works even when subprocess
 # inherits a PATH that doesn't include nvm (e.g. Flask/cron environments).
+# NOTE: For cron, NVM's node bin must be on PATH *before* this module loads
+# (see daily_runner.py docstring for example crontab entry).
 _CLAUDE_BIN = shutil.which("claude") or "claude"
 
 

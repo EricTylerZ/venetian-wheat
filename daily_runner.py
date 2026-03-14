@@ -24,6 +24,12 @@ Usage:
   python daily_runner.py --dry-run          # Show what would run
   python daily_runner.py --report-only      # Generate briefing from existing data
   python daily_runner.py --email            # Email the daily briefing
+
+Cron setup (not yet configured):
+  The claude CLI is installed via NVM, so cron must have NVM's node bin on PATH
+  for shutil.which("claude") in wheat/providers.py to resolve. Example crontab:
+
+  0 7 * * 1-6 export PATH="$HOME/.nvm/versions/node/v22.x/bin:$PATH" && cd /home/luke/projects/venetian-wheat && /usr/bin/python daily_runner.py >> reports/cycle_logs/cycle_$(date +\\%F).log 2>&1
 """
 
 import argparse
@@ -49,6 +55,8 @@ from tools.stewards_map import get_stewards_map, get_map_as_string
 
 REPORTS_DIR = os.path.join(PROJECT_ROOT, "reports")
 BRIEFINGS_DIR = os.path.join(REPORTS_DIR, "briefings")
+CYCLE_LOG_DIR = os.path.join(REPORTS_DIR, "cycle_logs")
+CYCLE_LOG_RETAIN_DAYS = 14
 
 
 def _load_dominion():
@@ -76,6 +84,23 @@ def _check_sabbath():
 def is_sunday():
     """Check if today is Sunday (day of rest). Legacy wrapper around _check_sabbath."""
     return _check_sabbath()
+
+
+def rotate_cycle_logs():
+    """Remove cycle logs older than CYCLE_LOG_RETAIN_DAYS."""
+    if not os.path.isdir(CYCLE_LOG_DIR):
+        return
+    cutoff = date.today().toordinal() - CYCLE_LOG_RETAIN_DAYS
+    for name in os.listdir(CYCLE_LOG_DIR):
+        if not name.startswith("cycle_") or not name.endswith(".log"):
+            continue
+        try:
+            log_date = date.fromisoformat(name[len("cycle_"):-len(".log")])
+        except ValueError:
+            continue
+        if log_date.toordinal() < cutoff:
+            os.remove(os.path.join(CYCLE_LOG_DIR, name))
+            print(f"  Rotated old log: {name}")
 
 
 def get_field_status(project_id):
@@ -352,6 +377,9 @@ def main():
         print(f"{'='*60}\n")
         print(channel_status_report())
         sys.exit(0)
+
+    # Rotate old cycle logs
+    rotate_cycle_logs()
 
     # Initialize escalation DB
     init_escalation_db()
