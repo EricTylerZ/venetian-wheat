@@ -6,7 +6,8 @@ from wheat.channels import load_channels, get_channels_for_field, process_intake
 from wheat.escalation import (
     init_escalation_db, create_case, escalate_case, resolve_case,
     get_cases_by_field, get_escalation_ready, get_cross_field_entities,
-    daily_escalation_check,
+    daily_escalation_check, get_all_cases, get_case_history,
+    get_stage_distribution, get_field_list, STAGES,
 )
 import sqlite3
 import os
@@ -678,6 +679,56 @@ def api_intake():
         "report_file": result["report_file"],
         "case_id": result["case_id"],
     })
+
+
+@app.route("/escalation")
+def escalation_dashboard():
+    """Escalation status dashboard — case overview by stage, field, and readiness."""
+    filter_field = request.args.get("field")
+    show_resolved = request.args.get("resolved") == "1"
+
+    if filter_field:
+        cases = get_cases_by_field(filter_field, active_only=not show_resolved)
+    else:
+        cases = get_all_cases(active_only=not show_resolved)
+
+    stage_dist = get_stage_distribution(active_only=not show_resolved)
+    ready = get_escalation_ready()
+    cross_field = get_cross_field_entities()
+    fields = get_field_list()
+
+    return render_template(
+        "escalation.html",
+        cases=cases,
+        stage_distribution=stage_dist,
+        stages=STAGES,
+        escalation_ready=ready,
+        cross_field_entities=cross_field,
+        fields=fields,
+        filter_field=filter_field,
+        show_resolved=show_resolved,
+        total_active=sum(1 for c in cases if not c.get("resolved_at")),
+    )
+
+
+@app.route("/api/escalation")
+def api_escalation():
+    """JSON API for escalation dashboard data."""
+    cases = get_all_cases(active_only=True)
+    return jsonify({
+        "cases": cases,
+        "stage_distribution": get_stage_distribution(),
+        "escalation_ready": get_escalation_ready(),
+        "cross_field_entities": get_cross_field_entities(),
+        "fields": get_field_list(),
+        "total_active": len(cases),
+    })
+
+
+@app.route("/api/cases/<int:case_id>/history")
+def api_case_history(case_id):
+    """Get escalation history for a case."""
+    return jsonify({"history": get_case_history(case_id)})
 
 
 if __name__ == "__main__":

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escalation Status — Venetian Wheat</title>
+    <style>
+        :root {
+            --wheat: #d4a843; --soil: #2c1810; --green: #4a7c3f;
+            --red: #8b3a3a; --bg: #faf6ee; --card: #fff;
+            --border: #e0d5c1; --text: #2c1810; --muted: #7a6e5d;
+            --blue: #3a5f8b;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg); color: var(--text);
+            line-height: 1.5; padding: 1.5rem;
+            max-width: 1200px; margin: 0 auto;
+        }
+        h1 { color: var(--soil); margin-bottom: 0.15rem; }
+        h2 { color: var(--soil); margin: 1.5rem 0 0.75rem; font-size: 1.2rem; }
+        .subtitle { color: var(--muted); margin-bottom: 1rem; font-size: 0.9rem; }
+        a { color: var(--blue); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .nav { margin-bottom: 1.5rem; font-size: 0.85rem; }
+        .nav a { margin-right: 1rem; }
+
+        /* Stats bar */
+        .stats-bar {
+            background: var(--soil); color: #e8dcc8; border-radius: 10px;
+            padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;
+            display: flex; justify-content: space-between; align-items: center;
+            flex-wrap: wrap; gap: 1rem;
+        }
+        .stats-bar .stats { display: flex; gap: 1.5rem; font-size: 0.85rem; }
+        .stats-bar .stat-num {
+            font-size: 1.5rem; font-weight: 700; color: var(--wheat); display: block;
+        }
+
+        /* Stage pipeline */
+        .pipeline {
+            display: flex; gap: 0; margin-bottom: 1.5rem;
+            border-radius: 8px; overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        .pipeline-stage {
+            flex: 1; text-align: center; padding: 0.75rem 0.5rem;
+            background: var(--card); border-right: 1px solid var(--border);
+            font-size: 0.75rem; position: relative;
+        }
+        .pipeline-stage:last-child { border-right: none; }
+        .pipeline-stage .stage-name {
+            text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;
+            font-size: 0.65rem; margin-bottom: 0.25rem;
+        }
+        .pipeline-stage .stage-count {
+            font-size: 1.4rem; font-weight: 700;
+        }
+        .pipeline-stage.has-cases { background: #fdf8ef; }
+
+        .stage-seed .stage-count { color: var(--muted); }
+        .stage-sprout .stage-count { color: var(--green); }
+        .stage-notice .stage-count { color: var(--blue); }
+        .stage-virtue .stage-count { color: #6a2d6a; }
+        .stage-community .stage-count { color: #2d6a6a; }
+        .stage-demand .stage-count { color: #6a3d2d; }
+        .stage-civil .stage-count { color: var(--red); }
+        .stage-harvest .stage-count { color: #1a5a1a; }
+
+        /* Cards */
+        .card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem;
+        }
+        .card-alert { border-color: var(--red); border-width: 2px; }
+        .card-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; }
+
+        /* Grid */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+        /* Field sidebar */
+        .field-list { list-style: none; }
+        .field-list li {
+            padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.85rem;
+        }
+        .field-list li:last-child { border-bottom: none; }
+        .field-list li.active-filter { background: #fdf8ef; font-weight: 600; }
+        .field-count {
+            background: var(--soil); color: var(--wheat);
+            padding: 0.1rem 0.45rem; border-radius: 10px;
+            font-size: 0.7rem; font-weight: 600;
+        }
+
+        /* Table */
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            background: var(--soil); color: var(--wheat);
+            padding: 0.5rem 0.75rem; text-align: left;
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        td {
+            padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border);
+            font-size: 0.82rem; vertical-align: top;
+        }
+        tr:last-child td { border-bottom: none; }
+
+        .stage-badge {
+            display: inline-block; padding: 0.15rem 0.5rem;
+            border-radius: 10px; font-size: 0.7rem; font-weight: 600;
+        }
+        .stage-badge-seed { background: #f0ebe0; color: var(--muted); }
+        .stage-badge-sprout { background: #e8f4e8; color: var(--green); }
+        .stage-badge-notice { background: #e8e8f4; color: var(--blue); }
+        .stage-badge-virtue { background: #f4e8f4; color: #6a2d6a; }
+        .stage-badge-community { background: #e8f4f4; color: #2d6a6a; }
+        .stage-badge-demand { background: #f4e8e0; color: #6a3d2d; }
+        .stage-badge-civil { background: #f4e0e0; color: var(--red); }
+        .stage-badge-harvest { background: #d4e8d4; color: #1a5a1a; }
+
+        .severity-1, .severity-2 { color: var(--muted); }
+        .severity-3 { color: var(--wheat); }
+        .severity-4 { color: #b8860b; font-weight: 600; }
+        .severity-5 { color: var(--red); font-weight: 700; }
+
+        .btn {
+            display: inline-block; padding: 0.3rem 0.75rem;
+            border: 1px solid var(--border); border-radius: 6px;
+            background: var(--card); color: var(--text);
+            cursor: pointer; font-size: 0.8rem; text-decoration: none;
+        }
+        .btn:hover { background: #f0ebe0; text-decoration: none; }
+        .btn-primary { background: var(--wheat); color: var(--soil); border-color: var(--wheat); font-weight: 600; }
+        .btn-danger { color: var(--red); border-color: var(--red); }
+        .btn-sm { padding: 0.2rem 0.5rem; font-size: 0.75rem; }
+
+        .entity-tag {
+            display: inline-block; padding: 0.1rem 0.4rem;
+            background: #f4e0e0; border-radius: 3px;
+            font-size: 0.75rem; color: var(--red); font-weight: 600;
+        }
+
+        .filters { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; font-size: 0.85rem; }
+        .empty-state { text-align: center; padding: 3rem; color: var(--muted); }
+
+        .toast {
+            position: fixed; bottom: 1.5rem; right: 1.5rem;
+            background: var(--soil); color: #e8dcc8; padding: 0.75rem 1.25rem;
+            border-radius: 8px; font-size: 0.85rem; z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            transform: translateY(100px); opacity: 0;
+            transition: transform 0.3s, opacity 0.3s;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <a href="/">Dashboard</a>
+        <a href="/escalation"><strong>Escalation Status</strong></a>
+    </div>
+
+    <h1>Escalation Status</h1>
+    <p class="subtitle">Subsidiarity-based case tracking — 8 stages from signal to resolution</p>
+
+    <!-- Stats bar -->
+    <div class="stats-bar">
+        <div class="stats">
+            <div>
+                <span class="stat-num">{{ total_active }}</span>
+                Active Cases
+            </div>
+            <div>
+                <span class="stat-num">{{ escalation_ready | length }}</span>
+                Ready to Escalate
+            </div>
+            <div>
+                <span class="stat-num">{{ cross_field_entities | length }}</span>
+                Cross-Field Patterns
+            </div>
+            <div>
+                <span class="stat-num">{{ fields | length }}</span>
+                Fields
+            </div>
+        </div>
+        <div>
+            {% if show_resolved %}
+                <a href="/escalation{% if filter_field %}?field={{ filter_field }}{% endif %}" class="btn btn-sm">Hide Resolved</a>
+            {% else %}
+                <a href="/escalation?resolved=1{% if filter_field %}&field={{ filter_field }}{% endif %}" class="btn btn-sm">Show Resolved</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Stage pipeline visualization -->
+    <h2>Stage Distribution</h2>
+    <div class="pipeline">
+        {% for stage in stages %}
+        <div class="pipeline-stage stage-{{ stage }} {% if stage_distribution[stage] > 0 %}has-cases{% endif %}">
+            <div class="stage-name">{{ stage }}</div>
+            <div class="stage-count">{{ stage_distribution[stage] }}</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="grid-2">
+        <!-- Escalation-ready cases -->
+        <div>
+            <h2>Escalation Ready</h2>
+            {% if escalation_ready %}
+            <div class="card card-alert">
+                <table>
+                    <thead>
+                        <tr><th>#</th><th>Entity</th><th>Stage</th><th>Severity</th><th>Action</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for case in escalation_ready %}
+                        <tr>
+                            <td>{{ case.id }}</td>
+                            <td>{{ case.entity }}</td>
+                            <td><span class="stage-badge stage-badge-{{ case.stage }}">{{ case.stage }}</span></td>
+                            <td><span class="severity-{{ case.severity }}">{{ case.severity }}</span></td>
+                            <td>
+                                {% if case.stage != 'harvest' %}
+                                <button class="btn btn-primary btn-sm" onclick="escalateCase({{ case.id }})">Escalate</button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card">
+                <p style="color: var(--muted); font-size: 0.85rem;">No cases past their escalation deadline.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Cross-field patterns -->
+        <div>
+            <h2>Cross-Field Patterns</h2>
+            {% if cross_field_entities %}
+            <div class="card card-alert">
+                {% for entity in cross_field_entities %}
+                <div style="margin-bottom: 0.75rem; {% if not loop.last %}border-bottom: 1px solid var(--border); padding-bottom: 0.75rem;{% endif %}">
+                    <div style="font-weight: 600;">{{ entity.entity }}</div>
+                    <div style="font-size: 0.8rem; color: var(--muted);">
+                        {{ entity.field_count }} fields: {{ entity.fields | join(', ') }}
+                        — Max severity: <span class="severity-{{ entity.max_severity }}">{{ entity.max_severity }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="card">
+                <p style="color: var(--muted); font-size: 0.85rem;">No entities appearing across multiple fields.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid-2">
+        <!-- Field filter sidebar -->
+        <div>
+            <h2>Cases by Field</h2>
+            <div class="card">
+                <ul class="field-list">
+                    <li class="{% if not filter_field %}active-filter{% endif %}">
+                        <a href="/escalation{% if show_resolved %}?resolved=1{% endif %}">All Fields</a>
+                        <span class="field-count">{{ cases | length }}</span>
+                    </li>
+                    {% for f in fields %}
+                    <li class="{% if filter_field == f.field %}active-filter{% endif %}">
+                        <a href="/escalation?field={{ f.field }}{% if show_resolved %}&resolved=1{% endif %}">{{ f.field }}</a>
+                        <span class="field-count">{{ f.active }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <!-- Summary -->
+        <div>
+            <h2>Stage Summary</h2>
+            <div class="card">
+                <table>
+                    <thead><tr><th>Stage</th><th>Wait Period</th><th>Cases</th></tr></thead>
+                    <tbody>
+                    {% for stage in stages %}
+                    <tr>
+                        <td><span class="stage-badge stage-badge-{{ stage }}">{{ stage }}</span></td>
+                        <td style="font-size: 0.8rem; color: var(--muted);">
+                            {% if stage == 'seed' %}1 day
+                            {% elif stage == 'sprout' %}3 days
+                            {% elif stage == 'notice' %}14 days
+                            {% elif stage == 'virtue' %}30 days
+                            {% elif stage == 'community' %}14 days
+                            {% elif stage == 'demand' %}30 days
+                            {% elif stage == 'civil' %}90 days
+                            {% elif stage == 'harvest' %}Terminal
+                            {% endif %}
+                        </td>
+                        <td style="font-weight: 600;">{{ stage_distribution[stage] }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- All cases table -->
+    <h2>
+        {% if filter_field %}Cases in {{ filter_field }}{% else %}All Cases{% endif %}
+        <span style="font-size: 0.85rem; font-weight: 400; color: var(--muted);">({{ cases | length }})</span>
+    </h2>
+
+    {% if cases %}
+    <div class="card">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th><th>Field</th><th>Entity</th><th>Issue</th>
+                    <th>Severity</th><th>Stage</th><th>Since</th><th>Deadline</th><th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for case in cases %}
+                <tr>
+                    <td>{{ case.id }}</td>
+                    <td><a href="/escalation?field={{ case.field }}">{{ case.field }}</a></td>
+                    <td style="font-weight: 600;">{{ case.entity }}</td>
+                    <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        {{ case.issue }}
+                    </td>
+                    <td><span class="severity-{{ case.severity }}">{{ case.severity }}</span></td>
+                    <td><span class="stage-badge stage-badge-{{ case.stage }}">{{ case.stage }}</span></td>
+                    <td style="font-size: 0.75rem; color: var(--muted);">
+                        {{ case.stage_entered_at[:10] if case.stage_entered_at else '' }}
+                    </td>
+                    <td style="font-size: 0.75rem; color: var(--muted);">
+                        {{ case.escalation_deadline[:10] if case.escalation_deadline else '' }}
+                    </td>
+                    <td style="white-space: nowrap;">
+                        {% if not case.resolved_at and case.stage != 'harvest' %}
+                            <button class="btn btn-primary btn-sm" onclick="escalateCase({{ case.id }})">Escalate</button>
+                            <button class="btn btn-sm" onclick="resolveCase({{ case.id }})">Resolve</button>
+                        {% elif case.resolved_at %}
+                            <span style="font-size: 0.75rem; color: var(--green);">Resolved</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>No cases found{% if filter_field %} in {{ filter_field }}{% endif %}.</p>
+    </div>
+    {% endif %}
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    function escalateCase(id) {
+        fetch('/api/cases/' + id + '/escalate', { method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({reason: 'Escalated from status dashboard'})
+        })
+        .then(r => r.json())
+        .then(d => { showToast(d.message); setTimeout(() => location.reload(), 500); })
+        .catch(e => showToast('Error: ' + e));
+    }
+
+    function resolveCase(id) {
+        const resolution = prompt('Resolution note:', 'Compliance achieved');
+        if (resolution === null) return;
+        fetch('/api/cases/' + id + '/resolve', { method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({resolution: resolution})
+        })
+        .then(r => r.json())
+        .then(d => { showToast(d.message); setTimeout(() => location.reload(), 500); })
+        .catch(e => showToast('Error: ' + e));
+    }
+
+    // Auto-refresh every 30s
+    setTimeout(() => location.reload(), 30000);
+    </script>
+</body>
+</html>

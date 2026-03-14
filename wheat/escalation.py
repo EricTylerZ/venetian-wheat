@@ -276,6 +276,70 @@ def get_cross_field_entities():
     return results
 
 
+def get_all_cases(active_only=True):
+    """Get all cases across all fields."""
+    init_escalation_db()
+    conn = sqlite3.connect(DB_PATH, timeout=15)
+    c = conn.cursor()
+    if active_only:
+        c.execute(
+            "SELECT * FROM cases WHERE resolved_at IS NULL ORDER BY severity DESC, created_at"
+        )
+    else:
+        c.execute("SELECT * FROM cases ORDER BY created_at DESC")
+    columns = [desc[0] for desc in c.description]
+    cases = [dict(zip(columns, row)) for row in c.fetchall()]
+    conn.close()
+    return cases
+
+
+def get_case_history(case_id):
+    """Get escalation history for a case."""
+    init_escalation_db()
+    conn = sqlite3.connect(DB_PATH, timeout=15)
+    c = conn.cursor()
+    c.execute(
+        "SELECT * FROM case_history WHERE case_id = ? ORDER BY changed_at",
+        (case_id,),
+    )
+    columns = [desc[0] for desc in c.description]
+    history = [dict(zip(columns, row)) for row in c.fetchall()]
+    conn.close()
+    return history
+
+
+def get_stage_distribution(active_only=True):
+    """Get count of cases at each stage."""
+    init_escalation_db()
+    conn = sqlite3.connect(DB_PATH, timeout=15)
+    c = conn.cursor()
+    where = "WHERE resolved_at IS NULL" if active_only else ""
+    c.execute(f"SELECT stage, COUNT(*) FROM cases {where} GROUP BY stage")
+    dist = {stage: 0 for stage in STAGES}
+    for row in c.fetchall():
+        dist[row[0]] = row[1]
+    conn.close()
+    return dist
+
+
+def get_field_list():
+    """Get distinct fields with case counts."""
+    init_escalation_db()
+    conn = sqlite3.connect(DB_PATH, timeout=15)
+    c = conn.cursor()
+    c.execute("""
+        SELECT field, COUNT(*) as total,
+               SUM(CASE WHEN resolved_at IS NULL THEN 1 ELSE 0 END) as active
+        FROM cases GROUP BY field ORDER BY active DESC
+    """)
+    fields = [
+        {"field": row[0], "total": row[1], "active": row[2]}
+        for row in c.fetchall()
+    ]
+    conn.close()
+    return fields
+
+
 def daily_escalation_check():
     """Run during daily briefing — check for cases ready to escalate and cross-field patterns."""
     ready = get_escalation_ready()
