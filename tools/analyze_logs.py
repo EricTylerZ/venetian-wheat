@@ -1,6 +1,7 @@
 #tools/analyze_logs.py
 import os
 import subprocess
+import sys
 import csv
 import re
 from datetime import datetime
@@ -20,7 +21,7 @@ def extract_purpose(content):
 
 def test_script(file_path):
     try:
-        cmd = ["python", "-m", "unittest", file_path]
+        cmd = [sys.executable, "-m", "unittest", file_path]
         result = subprocess.run(cmd, capture_output=True, text=True, shell=True, timeout=10)
         return "OK" in result.stdout or result.returncode == 0
     except subprocess.TimeoutExpired:
