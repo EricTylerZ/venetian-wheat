@@ -5,6 +5,7 @@
   "stewardship_score": 7,
   "sabbath": {
     "enforced": true,
+    "rest_day": "sunday",
     "note": "No Sunday runs (Mon-Sat cron)"
   },
   "wild_things": ["Grok API", "Venice AI", "CFPB", "CO AG", "PUC", "FMCSA", "CDOT"],

@@ -51,9 +51,31 @@ REPORTS_DIR = os.path.join(PROJECT_ROOT, "reports")
 BRIEFINGS_DIR = os.path.join(REPORTS_DIR, "briefings")
 
 
+def _load_dominion():
+    """Load .dominion.json from project root. Returns {} on missing/malformed file."""
+    dominion_path = os.path.join(PROJECT_ROOT, ".dominion.json")
+    try:
+        with open(dominion_path) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+def _check_sabbath():
+    """Check if today is a sabbath rest day per .dominion.json. Returns True if we should rest."""
+    dominion = _load_dominion()
+    sabbath = dominion.get("sabbath", {})
+    if not sabbath.get("enforced", False):
+        return False
+    rest_day = sabbath.get("rest_day", "sunday").lower()
+    day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    today_name = day_names[date.today().weekday()]
+    return today_name == rest_day
+
+
 def is_sunday():
-    """Check if today is Sunday (day of rest)."""
-    return date.today().weekday() == 6
+    """Check if today is Sunday (day of rest). Legacy wrapper around _check_sabbath."""
+    return _check_sabbath()
 
 
 def get_field_status(project_id):
