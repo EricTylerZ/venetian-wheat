@@ -12,6 +12,7 @@ from wheat.escalation import (
 import sqlite3
 import os
 import json
+import sys
 import threading
 import time
 from datetime import datetime, date
@@ -512,7 +513,7 @@ def api_daily_cycle():
         try:
             with open(log_file, "w") as lf:
                 proc = subprocess.Popen(
-                    ["python", "-u", "daily_runner.py"],
+                    [sys.executable, "-u", "daily_runner.py"],
                     cwd=os.path.dirname(os.path.realpath(__file__)),
                     stdout=lf, stderr=subprocess.STDOUT,
                     text=True,

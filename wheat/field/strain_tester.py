@@ -1,5 +1,6 @@
 #wheat/field/strain_tester.py
 import subprocess
+import sys
 import time
 import json
 import os
@@ -22,7 +23,7 @@ def setup_versions():
 def run_version(version):
     """Launch a field manager instance in the given version directory."""
     version_dir = os.path.join(BASE_DIR, "strains", "versions", version)
-    cmd = ["python", "field_manager.py"]
+    cmd = [sys.executable, "field_manager.py"]
     process = subprocess.Popen(cmd, cwd=version_dir)
     return process
 

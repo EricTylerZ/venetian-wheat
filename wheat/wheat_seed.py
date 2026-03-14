@@ -1,5 +1,6 @@
 # wheat/wheat_seed.py
 import subprocess
+import sys
 import os
 import time
 import json
@@ -125,9 +126,9 @@ class WheatSeed:
         script_path = os.path.join(self.seed_dir, "script.py")
         with open(script_path, "w", encoding="utf-8") as f:
             f.write(self.code)
-        cmd = ["python", "-m", "unittest", script_path]
+        cmd = [sys.executable, "-m", "unittest", script_path]
         test_result = subprocess.run(cmd, capture_output=True, text=True)
-        run_result = subprocess.run(["python", script_path], capture_output=True, text=True)
+        run_result = subprocess.run([sys.executable, script_path], capture_output=True, text=True)
         output = run_result.stdout or run_result.stderr
         self.progress["test_result"] = test_result.stdout or test_result.stderr
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
