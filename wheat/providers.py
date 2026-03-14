@@ -11,12 +11,17 @@ Each provider implements generate(prompt, model, max_tokens) -> (text, usage_dic
 """
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import time
 import random
 import requests
 from datetime import datetime
+
+# Resolve claude CLI path at import time so it works even when subprocess
+# inherits a PATH that doesn't include nvm (e.g. Flask/cron environments).
+_CLAUDE_BIN = shutil.which("claude") or "claude"
 
 
 class APIProvider:
@@ -111,7 +116,7 @@ class ClaudeCodeProvider:
                     f.write(prompt)
                     prompt_file = f.name
 
-                cmd = ["claude", "-p"]
+                cmd = [_CLAUDE_BIN, "-p"]
                 if model:
                     cmd.extend(["--model", model])
                 # Clear nesting guard so claude CLI works from within a Claude Code session
