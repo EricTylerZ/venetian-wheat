@@ -57,6 +57,56 @@ REPORTS_DIR = os.path.join(PROJECT_ROOT, "reports")
 BRIEFINGS_DIR = os.path.join(REPORTS_DIR, "briefings")
 CYCLE_LOG_DIR = os.path.join(REPORTS_DIR, "cycle_logs")
 CYCLE_LOG_RETAIN_DAYS = 14
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+ENGINE_STATUS_PATH = os.path.join(DATA_DIR, "engine_status.json")
+
+
+def write_engine_status(phase, status, metrics=None, error=None):
+    """Write engine status to data/engine_status.json for agent observability.
+
+    See DOMINION.md Part VII: Agent-Observable Architecture.
+    """
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+    # Load existing status to preserve history
+    existing = {}
+    try:
+        with open(ENGINE_STATUS_PATH) as f:
+            existing = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+
+    now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    errors = existing.get("errors", [])
+    if error:
+        errors.append({"timestamp": now, "phase": phase, "message": str(error)})
+        errors = errors[-5:]  # Keep last 5 errors
+
+    engine_status = {
+        "updated_at": now,
+        "project": "venetian-wheat",
+        "process_type": "cron_daily",
+        "processes": {
+            "daily_runner": {
+                "status": status,
+                "phase": phase,
+                "pid": os.getpid(),
+                "started_at": existing.get("processes", {}).get("daily_runner", {}).get("started_at", now),
+                "last_heartbeat": now,
+            }
+        },
+        "health": "degraded" if error else ("running" if status == "running" else "idle"),
+        "errors": errors,
+        "metrics": {**existing.get("metrics", {}), **(metrics or {})},
+        "config": {
+            "sabbath_enforced": _load_dominion().get("sabbath", {}).get("enforced", False),
+            "schedule": "Mon-Sat 07:00",
+        },
+    }
+
+    with open(ENGINE_STATUS_PATH, "w") as f:
+        json.dump(engine_status, f, indent=2)
+        f.write("\n")
 
 
 def _load_dominion():
@@ -366,6 +416,7 @@ def main():
 
     # Sunday check
     if is_sunday() and not args.force_sunday:
+        write_engine_status("sabbath", "idle", metrics={"last_rest": date.today().isoformat()})
         print("Today is Sunday. We rest on the Sabbath.")
         print("Use --force-sunday to override.")
         sys.exit(0)
@@ -436,20 +487,36 @@ def main():
         sys.exit(0)
 
     # ===== FULL DAILY CYCLE =====
+    num_channels = len(load_channels())
+    write_engine_status("startup", "running", metrics={
+        "run_date": date.today().isoformat(),
+        "fields_active": len(automotive_fields),
+        "channels_total": num_channels,
+    })
     print(f"\n{'#'*60}")
     print(f"  VENETIAN WHEAT — DAILY INTELLIGENCE RUN")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"  Fields: {len(automotive_fields)} | Channels: {len(load_channels())}")
+    print(f"  Fields: {len(automotive_fields)} | Channels: {num_channels}")
     print(f"{'#'*60}")
 
     # ----- PHASE 1: CHANNEL SCANS (Sonnet) -----
     scan_results = {}
     if not args.analyze_only:
+        write_engine_status("phase_1_scan", "running")
         print(f"\n{'='*60}")
         print(f"  PHASE 1: CHANNEL SCANS (Claude Sonnet)")
         print(f"{'='*60}")
         scan_results = run_daily_scans(dry_run=False)
         scan_summary, signals_by_field = aggregate_scan_results(scan_results)
+        channels_scanned = len([r for r in scan_results.values() if r])
+        total_signals = sum(
+            len(r.get("signals", [])) for r in scan_results.values()
+            if r and isinstance(r.get("signals"), list)
+        )
+        write_engine_status("phase_1_scan", "running", metrics={
+            "channels_scanned": channels_scanned,
+            "signals_detected": total_signals,
+        })
         print(f"\n{scan_summary}")
 
     if args.scan_only:
@@ -459,12 +526,14 @@ def main():
     # ----- PHASE 1.5: ANALYST CORRELATION (Opus) -----
     correlation_analysis = None
     if scan_results:
+        write_engine_status("phase_1.5_correlation", "running")
         print(f"\n{'='*60}")
         print(f"  PHASE 1.5: ANALYST CORRELATION (Claude Opus)")
         print(f"{'='*60}")
         correlation_analysis, _ = correlate_scans(scan_results)
 
     # ----- PHASE 2: FIELD ANALYSIS -----
+    write_engine_status("phase_2_analysis", "running")
     print(f"\n{'='*60}")
     print(f"  PHASE 2: FIELD ANALYSIS (Claude Code Agents)")
     print(f"{'='*60}")
@@ -486,9 +555,14 @@ def main():
             results[pid] = run_field(pid, pdata, guidance=field_guidance)
         except Exception as e:
             print(f"  ERROR in {pid}: {e}")
+            write_engine_status("phase_2_analysis", "running", error=f"Field {pid}: {e}")
             results[pid] = None
 
     # ----- PHASE 3: CORRELATION & ESCALATION -----
+    write_engine_status("phase_3_escalation", "running", metrics={
+        "fields_analyzed": len([r for r in results.values() if r]),
+        "fields_failed": len([r for r in results.values() if r is None]),
+    })
     print(f"\n{'='*60}")
     print(f"  PHASE 3: CORRELATION & ESCALATION CHECK")
     print(f"{'='*60}")
@@ -503,6 +577,7 @@ def main():
             print(f"    {entity['entity']}: flagged in {entity['field_count']} fields — AUTO-ESCALATION CANDIDATE")
 
     # ----- PHASE 4: BRIEFING (Analyst Synthesis) -----
+    write_engine_status("phase_4_briefing", "running")
     print(f"\n{'='*60}")
     print(f"  PHASE 4: INTELLIGENCE BRIEFING (Claude Opus)")
     print(f"{'='*60}")
@@ -515,6 +590,22 @@ def main():
     )
     if args.email:
         send_email_briefing(briefing_text, briefing_file)
+
+    # ----- CYCLE COMPLETE -----
+    total_fruitful = sum(
+        sum(1 for s in st["seeds"] if s["status"] == "Fruitful")
+        for st in results.values() if st
+    )
+    total_barren = sum(
+        sum(1 for s in st["seeds"] if s["status"] == "Barren")
+        for st in results.values() if st
+    )
+    write_engine_status("complete", "idle", metrics={
+        "last_completed": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+        "total_fruitful": total_fruitful,
+        "total_barren": total_barren,
+        "cross_field_alerts": len(cross_field) if cross_field else 0,
+    })
 
 
 if __name__ == "__main__":

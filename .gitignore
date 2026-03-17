@@ -45,6 +45,7 @@ wheat/__pycache__/
 # Intelligence data (generated, not committed)
 intake/
 reports/
+data/engine_status.json
 wheat/projects/
 email_config.json
 
